@@ -1,0 +1,31 @@
+name: Render Ghaith Web Video
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'video_montage/assets/**'
+      - 'video_montage/render_ghaith_video.py'
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Render video
+        run: python3 video_montage/render_ghaith_video.py
+
+      - name: Upload final MP4
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghaith-web-final-video
+          path: video_montage/output/Ghaith_Web_First_Week_AI_FINAL.mp4
+          if-no-files-found: error
+          retention-days: 7
