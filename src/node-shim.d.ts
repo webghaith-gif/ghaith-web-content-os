@@ -1,5 +1,5 @@
 
-declare const process: { env: Record<string, string | undefined> };
+declare const process: { env: Record<string, string | undefined>; exitCode?: number };
 declare const __dirname: string;
 declare const Buffer: any;
 type Buffer = any;
@@ -13,3 +13,11 @@ declare module "node:os" { const os: any; export default os; }
 declare module "node:crypto" { export const randomUUID: () => string; export const createHash: any; }
 declare module "node:test" { const test: any; export default test; export const describe: any; export const it: any; }
 declare module "node:assert/strict" { const assert: any; export default assert; }
+declare module "pg" {
+  export class Pool {
+    constructor(config?: any);
+    query<T = any>(text: string, values?: unknown[]): Promise<{ rows: T[] }>;
+    connect(): Promise<{ query<T = any>(text: string, values?: unknown[]): Promise<{ rows: T[] }>; release(): void }>;
+    end(): Promise<void>;
+  }
+}

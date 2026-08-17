@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { AppError } from './core/errors';
 import { env } from './config/env';
-import { JsonDb } from './repositories/json-db';
 import { Store } from './repositories/store';
+import { createDatabase } from './repositories/database-factory';
 import { IntelligenceService } from './services/intelligence.service';
 import { ContentGenerationService } from './services/content-generation.service';
 import { ApprovalService } from './services/approval.service';
@@ -22,7 +22,7 @@ import { HeyGenAdapter } from './integrations/heygen.adapter';
 import type { PublishResult } from './core/types';
 
 export function createApp() {
-  const store = new Store(new JsonDb(env.DATA_FILE));
+  const store = new Store(createDatabase());
   const intelligence = new IntelligenceService(store);
   const generation = new ContentGenerationService(store);
   const approval = new ApprovalService(store);
@@ -47,11 +47,15 @@ export function createApp() {
       const method = req.method ?? 'GET';
 
       if (method === 'GET' && isStaticPath(url.pathname)) return sendStatic(res, url.pathname);
-      if (url.pathname === '/api/health' && method === 'GET') return sendJson(res, 200, { ok: true, service: 'Ghaith Web Content OS', platforms: platforms.list() });
+      if (url.pathname === '/api/health' && method === 'GET') {
+        await store.healthCheck();
+        return sendJson(res, 200, { ok: true, service: 'Ghaith Web Content OS', storage: env.STORAGE_DRIVER, platforms: platforms.list() });
+      }
       if (url.pathname === '/api/system' && method === 'GET') {
         return sendJson(res, 200, {
           service: 'Ghaith Web Content OS',
           publishMode: env.PUBLISH_MODE,
+          storage: env.STORAGE_DRIVER,
           platforms: platforms.list(),
           clickupListId: env.CLICKUP_LIST_ID ?? null,
           integrations: {
@@ -112,7 +116,6 @@ export function createApp() {
         if (action === 'publish') return sendJson(res, 200, await publishing.publish(id));
       }
 
-      // Optional callback from Make. This keeps the app dashboard synchronized with SUCCESS/WARNING/ERROR.
       if (url.pathname === '/api/webhooks/make' && method === 'POST') {
         if (env.MAKE_WEBHOOK_SECRET && req.headers['x-ghaith-webhook-secret'] !== env.MAKE_WEBHOOK_SECRET) {
           throw new AppError('Invalid webhook secret.', 401, 'UNAUTHORIZED');

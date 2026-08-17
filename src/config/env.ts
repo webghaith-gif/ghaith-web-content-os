@@ -6,6 +6,20 @@ function numberEnv(name: string, fallback: number): number {
   return value;
 }
 
+function booleanEnv(name: string, fallback: boolean): boolean {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (!raw) return fallback;
+  if (['1', 'true', 'yes', 'on', 'require'].includes(raw)) return true;
+  if (['0', 'false', 'no', 'off', 'disable'].includes(raw)) return false;
+  throw new Error(`${name} must be a boolean.`);
+}
+
+function storageDriver(): 'json' | 'postgres' {
+  const raw = (process.env.STORAGE_DRIVER ?? (process.env.DATABASE_URL ? 'postgres' : 'json')).trim().toLowerCase();
+  if (raw !== 'json' && raw !== 'postgres') throw new Error('STORAGE_DRIVER must be json or postgres.');
+  return raw;
+}
+
 function optionalUrl(name: string): string | undefined {
   const value = process.env[name]?.trim();
   if (!value) return undefined;
@@ -16,7 +30,11 @@ function optionalUrl(name: string): string | undefined {
 export const env = {
   PORT: numberEnv('PORT', 3000),
   APP_BASE_URL: process.env.APP_BASE_URL ?? 'http://localhost:3000',
+  STORAGE_DRIVER: storageDriver(),
   DATA_FILE: process.env.DATA_FILE ?? './data/db.json',
+  DATABASE_URL: process.env.DATABASE_URL?.trim() || undefined,
+  DATABASE_SSL: booleanEnv('DATABASE_SSL', process.env.NODE_ENV === 'production'),
+  DATABASE_SSL_REJECT_UNAUTHORIZED: booleanEnv('DATABASE_SSL_REJECT_UNAUTHORIZED', true),
   PUBLISH_MAX_RETRIES: numberEnv('PUBLISH_MAX_RETRIES', 3),
   PUBLISH_RETRY_BASE_MS: numberEnv('PUBLISH_RETRY_BASE_MS', 500),
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
