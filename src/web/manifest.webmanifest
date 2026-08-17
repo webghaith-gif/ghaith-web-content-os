@@ -1,0 +1,12 @@
+{
+  "name": "Ghaith Web Content OS",
+  "short_name": "Ghaith Web",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f0e7",
+  "theme_color": "#0b1f3a",
+  "description": "منظومة غيث ويب من التقارير والذكاء إلى ClickUp وMake والنشر العام.",
+  "icons": [{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}

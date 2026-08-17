@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1f3a" />
+  <meta name="description" content="Ghaith Web Content OS — من الذكاء إلى النشر العام" />
+  <title>Ghaith Web Content OS</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">GW</div>
+      <div><strong>غيث ويب</strong><span>Content OS</span></div>
+    </div>
+    <nav id="nav">
+      <button class="nav-item active" data-view="dashboard"><span>⌂</span>لوحة التحكم</button>
+      <button class="nav-item" data-view="reports"><span>▤</span>التقارير</button>
+      <button class="nav-item" data-view="opportunities"><span>✦</span>الفرص</button>
+      <button class="nav-item" data-view="content"><span>▣</span>المحتوى</button>
+      <button class="nav-item" data-view="logs"><span>≡</span>سجل النشر</button>
+      <button class="nav-item" data-view="integrations"><span>⛓</span>التكاملات</button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="mini-status"><i id="systemDot"></i><span id="systemStatus">جاري الفحص…</span></div>
+      <small>Reports → ClickUp → Make → Public</small>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="top-title">
+        <button class="icon-btn mobile-only" id="menuBtn" aria-label="القائمة">☰</button>
+        <div><h1 id="pageTitle">لوحة التحكم</h1><p id="pageSubtitle">متابعة المنظومة من الفكرة حتى النشر</p></div>
+      </div>
+      <div class="top-actions">
+        <button class="btn ghost" id="installBtn" hidden>تثبيت التطبيق</button>
+        <button class="icon-btn" id="refreshBtn" title="تحديث">↻</button>
+        <button class="btn primary" data-open="reportModal">+ تقرير جديد</button>
+      </div>
+    </header>
+
+    <section class="view active" id="view-dashboard">
+      <div class="hero panel">
+        <div>
+          <span class="eyebrow">GHAITH WEB CONTENT OS</span>
+          <h2>من الذكاء إلى منشور عام — بموافقة بشرية إلزامية</h2>
+          <p>التقارير والفرص والمحتوى والأصول والمراجعة وClickUp وMake والنتائج في مكان واحد.</p>
+        </div>
+        <div class="hero-state"><span>وضع النشر</span><strong id="publishMode">—</strong></div>
+      </div>
+
+      <div class="workflow panel" id="workflow">
+        <div class="flow-step"><b>1</b><span>Reports</span></div><i>←</i>
+        <div class="flow-step"><b>2</b><span>Opportunities</span></div><i>←</i>
+        <div class="flow-step"><b>3</b><span>Content</span></div><i>←</i>
+        <div class="flow-step"><b>4</b><span>IN REVIEW</span></div><i>←</i>
+        <div class="flow-step accent"><b>5</b><span>ClickUp READY</span></div><i>←</i>
+        <div class="flow-step accent"><b>6</b><span>Make</span></div><i>←</i>
+        <div class="flow-step success"><b>7</b><span>PUBLISHED</span></div>
+      </div>
+
+      <div class="metrics-grid" id="metricsGrid"></div>
+
+      <div class="two-col">
+        <section class="panel">
+          <div class="panel-head"><div><h3>آخر المحتوى</h3><p>أحدث حزم المحتوى وحالتها</p></div><button class="link-btn" data-view-link="content">عرض الكل</button></div>
+          <div id="latestContent" class="list-stack empty-box">لا يوجد محتوى بعد.</div>
+        </section>
+        <section class="panel">
+          <div class="panel-head"><div><h3>جاهزية التكاملات</h3><p>الاتصالات اللازمة للتشغيل الفعلي</p></div><button class="link-btn" data-view-link="integrations">التفاصيل</button></div>
+          <div id="integrationMini" class="integration-mini"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="view-reports">
+      <div class="section-toolbar">
+        <div><h2>التقارير والذكاء</h2><p>أضف التقرير اليومي أو السابق ثم استخرج منه فرصًا قابلة للتنفيذ.</p></div>
+        <button class="btn primary" data-open="reportModal">+ إضافة تقرير</button>
+      </div>
+      <div class="panel table-wrap"><table><thead><tr><th>العنوان</th><th>المصدر</th><th>التاريخ</th><th>الإجراء</th></tr></thead><tbody id="reportsBody"></tbody></table></div>
+    </section>
+
+    <section class="view" id="view-opportunities">
+      <div class="section-toolbar"><div><h2>بنك الفرص</h2><p>الفرص مرتبة تلقائيًا حسب قوة الإشارة والملاءمة.</p></div><span class="badge" id="opportunityCount">0 فرصة</span></div>
+      <div class="cards-grid" id="opportunityGrid"></div>
+    </section>
+
+    <section class="view" id="view-content">
+      <div class="section-toolbar">
+        <div><h2>خط إنتاج المحتوى</h2><p>المراجعة والموافقة والأصول والتسليم إلى ClickUp ثم Make.</p></div>
+        <select id="contentFilter" class="select"><option value="ALL">كل الحالات</option><option>IN_REVIEW</option><option>READY</option><option>PUBLISHED</option><option>DRAFT</option><option>IN_PROGRESS</option><option>ARCHIVED</option></select>
+      </div>
+      <div id="contentGrid" class="content-grid"></div>
+    </section>
+
+    <section class="view" id="view-logs">
+      <div class="section-toolbar"><div><h2>سجل النشر</h2><p>SUCCESS / WARNING / ERROR لكل منصة.</p></div><div class="legend"><span class="dot success"></span>نجاح <span class="dot warning"></span>تحذير <span class="dot error"></span>خطأ</div></div>
+      <div class="panel table-wrap"><table><thead><tr><th>النتيجة</th><th>المنصة</th><th>المحتوى</th><th>المحاولة</th><th>التاريخ</th><th>الرابط</th></tr></thead><tbody id="logsBody"></tbody></table></div>
+    </section>
+
+    <section class="view" id="view-integrations">
+      <div class="section-toolbar"><div><h2>التكاملات</h2><p>لا تُعرض المفاتيح السرية هنا. الاتصال يتم من متغيرات البيئة على الخادم.</p></div><button class="btn ghost" id="copyEnvBtn">نسخ أسماء الإعدادات</button></div>
+      <div class="integration-grid" id="integrationGrid"></div>
+      <div class="panel note-panel"><h3>وضع Ghaith Web الحالي</h3><p>الوضع الافتراضي <b>clickup_watch</b>: عند الموافقة يصبح المحتوى READY داخل ClickUp، ثم يلتقطه سيناريو Make الحالي عبر Watch Tasks. ويمكن التحويل إلى webhook لاحقًا دون تغيير Core.</p></div>
+    </section>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop"></div>
+<div class="modal" id="reportModal" aria-hidden="true">
+  <div class="modal-head"><div><h3>إضافة تقرير</h3><p>يمكنك لصق تقرير اليوم أو أي تقرير سابق.</p></div><button class="icon-btn" data-close>×</button></div>
+  <form id="reportForm" class="form-grid">
+    <label>العنوان<input name="title" required placeholder="مثال: التقرير اليومي الشامل — 15 أوت 2026" /></label>
+    <label>المصدر<input name="source" placeholder="Daily Intelligence / Manual / Ghaith Web" /></label>
+    <label class="full">نص التقرير<textarea name="body" required rows="12" placeholder="الصق التقرير هنا…"></textarea></label>
+    <div class="form-actions full"><button type="button" class="btn ghost" data-close>إلغاء</button><button class="btn primary">حفظ التقرير</button></div>
+  </form>
+</div>
+
+<div class="modal" id="platformModal" aria-hidden="true">
+  <div class="modal-head"><div><h3>إنشاء حزمة محتوى</h3><p id="platformOpportunityTitle"></p></div><button class="icon-btn" data-close>×</button></div>
+  <form id="platformForm">
+    <input type="hidden" name="opportunityId" />
+    <div class="platform-choices" id="platformChoices"></div>
+    <div class="form-actions"><button type="button" class="btn ghost" data-close>إلغاء</button><button class="btn primary">إنشاء المحتوى</button></div>
+  </form>
+</div>
+
+<div class="modal wide" id="contentModal" aria-hidden="true">
+  <div class="modal-head"><div><h3 id="contentModalTitle">تفاصيل المحتوى</h3><p id="contentModalMeta"></p></div><button class="icon-btn" data-close>×</button></div>
+  <div id="contentModalBody"></div>
+</div>
+
+<div class="modal small" id="confirmModal" aria-hidden="true">
+  <div class="modal-head"><div><h3>تأكيد التسليم للنشر</h3><p>لن يتم تجاوز بوابة READY.</p></div><button class="icon-btn" data-close>×</button></div>
+  <div class="confirm-box"><p id="confirmText"></p><div class="form-actions"><button class="btn ghost" data-close>إلغاء</button><button class="btn danger" id="confirmPublishBtn">اعتمد وأرسل للنشر</button></div></div>
+</div>
+
+<div id="toastHost" class="toast-host"></div>
+<script src="/app.js" defer></script>
+</body>
+</html>
