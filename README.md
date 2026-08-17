@@ -16,7 +16,8 @@ A runnable TypeScript/Node.js orchestration layer that mirrors the existing Ghai
 - Optional OpenAI intelligence/content generation.
 - Optional Semrush enrichment bridge.
 - Optional Canva and HeyGen automation bridges.
-- JSON persistence for zero-setup local operation.
+- PostgreSQL persistence for production, with transactional mutation locking.
+- JSON persistence retained as a zero-setup local/development fallback.
 - REST API + full responsive Arabic RTL web app / installable PWA.
 - Tests and Mermaid architecture.
 
@@ -24,27 +25,23 @@ A runnable TypeScript/Node.js orchestration layer that mirrors the existing Ghai
 
 - Node.js 22+
 - npm
-- No runtime npm dependencies; only TypeScript tooling is installed for development/build.
+- Runtime PostgreSQL client dependency (`pg`) plus TypeScript tooling for development/build.
 - External credentials only for integrations you actually enable.
 
 ## Quick start
 
-The ZIP includes a prebuilt `dist/`, so you can start immediately with Node.js 22+:
+Install dependencies, copy the environment template, build, and start:
 
 ```bash
+npm install
 cp .env.example .env
-node --env-file=.env dist/src/server.js
+npm run build
+npm start
 ```
 
 Open `http://localhost:3000`.
 
-If you want to edit/rebuild the TypeScript source:
-
-```bash
-npm install
-npm run build
-npm start
-```
+For zero-setup local storage, set `STORAGE_DRIVER=json`. For production, set `DATABASE_URL` and use PostgreSQL.
 
 Without external credentials the app still starts. The default publishing mode is **`clickup_watch`**, which mirrors the current Ghaith Web workflow: human approval → ClickUp READY → the existing Make Watch Tasks scenario. Set `PUBLISH_MODE=webhook` only if you intentionally want the app to call a Make custom webhook directly.
 
@@ -56,7 +53,36 @@ npm run build
 npm start
 ```
 
-For production, mount `./data` on persistent storage or replace `JsonDb` with a database repository.
+For production, use PostgreSQL. The app automatically selects PostgreSQL when `DATABASE_URL` is present unless `STORAGE_DRIVER=json` is explicitly forced.
+
+Recommended production variables:
+
+```env
+STORAGE_DRIVER=postgres
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
+DATABASE_SSL=true
+DATABASE_SSL_REJECT_UNAUTHORIZED=true
+```
+
+`JsonDb` remains available for local development only.
+
+To migrate an existing local JSON state into an empty PostgreSQL database:
+
+```bash
+npm run migrate:postgres
+```
+
+The migration refuses to overwrite a non-empty PostgreSQL state unless `MIGRATION_FORCE=true` is explicitly set.
+
+## Persistent storage
+
+The application uses a backend-neutral `DatabaseBackend` interface.
+
+- `PostgresDb` is the production implementation. It stores the application state in PostgreSQL, wraps each mutation in a transaction, and locks the state row with `SELECT ... FOR UPDATE` to prevent lost updates.
+- `JsonDb` is retained for local development and lightweight tests.
+- `GET /api/health` now verifies the storage layer is readable before returning success.
+
+The current PostgreSQL schema intentionally preserves the existing domain model as one JSONB state document so the application can move to durable hosting without rewriting the services. The repository abstraction leaves room for later normalization into dedicated tables if scale requires it.
 
 ## API
 
@@ -195,7 +221,7 @@ src/
   core/            Domain models and errors
   integrations/    OpenAI, ClickUp, Make, Drive, Semrush, Canva, HeyGen
   platforms/       Generic Platform Adapter + registry
-  repositories/    JSON persistence
+  repositories/    Database abstraction + PostgreSQL production persistence + JsonDb fallback
   routes/          REST API
   services/        Intelligence, content, approval, assets, publish, metrics
   web/             Lightweight dashboard
@@ -205,7 +231,6 @@ ARCHITECTURE.md
 ```
 
 See `ARCHITECTURE.md` for the Mermaid diagram.
-
 
 ## Arabic app setup
 

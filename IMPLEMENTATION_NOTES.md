@@ -9,4 +9,7 @@
 - Platform list remains configurable through `SUPPORTED_PLATFORMS`.
 - External secrets are server-side environment variables only.
 - Current ClickUp list ID is prefilled in `.env.example`; the API token is intentionally blank.
-- 5 automated tests pass, including approval, idempotency, platform extensibility, and Make callback completion.
+- Persistent PostgreSQL storage is implemented through `PostgresDb` and selected automatically when `DATABASE_URL` is present.
+- PostgreSQL mutations run inside transactions and lock the singleton state row before update, preventing lost updates between concurrent writers.
+- `JsonDb` remains a zero-setup local fallback; production deployments should use PostgreSQL.
+- CI starts a real PostgreSQL service and tests persistence plus transaction rollback in addition to the existing approval/idempotency/platform/Make tests.

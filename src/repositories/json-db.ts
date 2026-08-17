@@ -1,27 +1,20 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { ContentItem, Opportunity, PublicationLog, Report } from '../core/types';
+import type { DatabaseBackend, DatabaseShape } from './database';
+import { emptyDb, normalizeDb } from './database';
 
-export interface DatabaseShape {
-  reports: Report[];
-  opportunities: Opportunity[];
-  contents: ContentItem[];
-  logs: PublicationLog[];
-}
-
-const emptyDb = (): DatabaseShape => ({ reports: [], opportunities: [], contents: [], logs: [] });
-
-export class JsonDb {
+export class JsonDb implements DatabaseBackend {
   constructor(private readonly filePath: string) {}
 
   async read(): Promise<DatabaseShape> {
     try {
       const raw = await fs.readFile(this.filePath, 'utf8');
-      return { ...emptyDb(), ...JSON.parse(raw) };
+      return normalizeDb(JSON.parse(raw));
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        await this.write(emptyDb());
-        return emptyDb();
+        const initial = emptyDb();
+        await this.write(initial);
+        return initial;
       }
       throw error;
     }

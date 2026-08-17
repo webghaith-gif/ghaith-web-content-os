@@ -11,11 +11,15 @@
     "build": "tsc -p tsconfig.json && node scripts/copy-static.mjs",
     "start": "node --env-file=.env dist/src/server.js",
     "test": "npm run build && node --test dist/tests/*.test.js",
-    "check": "tsc -p tsconfig.json --noEmit"
+    "check": "tsc -p tsconfig.json --noEmit",
+    "migrate:postgres": "npm run build && node --env-file=.env dist/src/scripts/migrate-json-to-postgres.js"
   },
   "devDependencies": {
     "@types/node": "26.1.2",
     "ts-node": "10.9.2",
     "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "pg": "8.22.0"
   }
 }

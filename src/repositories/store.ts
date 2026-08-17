@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { ContentItem, Opportunity, PublicationLog, Report } from '../core/types';
 import { NotFoundError } from '../core/errors';
-import { JsonDb } from './json-db';
+import type { DatabaseBackend } from './database';
 
 export class Store {
-  constructor(private readonly db: JsonDb) {}
+  constructor(private readonly db: DatabaseBackend) {}
+
+  async healthCheck(): Promise<void> { await this.db.read(); }
 
   async createReport(input: Omit<Report, 'id' | 'createdAt'>): Promise<Report> {
     const report: Report = { ...input, id: randomUUID(), createdAt: new Date().toISOString() };
