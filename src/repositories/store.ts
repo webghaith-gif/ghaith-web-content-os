@@ -1,0 +1,61 @@
+import { randomUUID } from 'node:crypto';
+import type { ContentItem, Opportunity, PublicationLog, Report } from '../core/types';
+import { NotFoundError } from '../core/errors';
+import { JsonDb } from './json-db';
+
+export class Store {
+  constructor(private readonly db: JsonDb) {}
+
+  async createReport(input: Omit<Report, 'id' | 'createdAt'>): Promise<Report> {
+    const report: Report = { ...input, id: randomUUID(), createdAt: new Date().toISOString() };
+    return this.db.mutate((db) => { db.reports.push(report); return report; });
+  }
+  async listReports() { return (await this.db.read()).reports; }
+  async getReport(id: string) {
+    const item = (await this.db.read()).reports.find((x) => x.id === id);
+    if (!item) throw new NotFoundError('Report');
+    return item;
+  }
+
+  async saveOpportunity(input: Omit<Opportunity, 'id' | 'createdAt'>): Promise<Opportunity> {
+    const opportunity: Opportunity = { ...input, id: randomUUID(), createdAt: new Date().toISOString() };
+    return this.db.mutate((db) => { db.opportunities.push(opportunity); return opportunity; });
+  }
+  async listOpportunities() { return (await this.db.read()).opportunities.sort((a, b) => b.score.total - a.score.total); }
+  async getOpportunity(id: string) {
+    const item = (await this.db.read()).opportunities.find((x) => x.id === id);
+    if (!item) throw new NotFoundError('Opportunity');
+    return item;
+  }
+
+  async createContent(input: Omit<ContentItem, 'id' | 'createdAt' | 'updatedAt' | 'revision'>): Promise<ContentItem> {
+    const now = new Date().toISOString();
+    const item: ContentItem = { ...input, id: randomUUID(), createdAt: now, updatedAt: now, revision: 1 };
+    return this.db.mutate((db) => { db.contents.push(item); return item; });
+  }
+  async listContents() { return (await this.db.read()).contents; }
+  async getContent(id: string) {
+    const item = (await this.db.read()).contents.find((x) => x.id === id);
+    if (!item) throw new NotFoundError('Content');
+    return item;
+  }
+  async updateContent(id: string, patch: Partial<ContentItem>): Promise<ContentItem> {
+    return this.db.mutate((db) => {
+      const index = db.contents.findIndex((x) => x.id === id);
+      if (index < 0) throw new NotFoundError('Content');
+      const current = db.contents[index]!;
+      const updated: ContentItem = { ...current, ...patch, id: current.id, updatedAt: new Date().toISOString() };
+      db.contents[index] = updated;
+      return updated;
+    });
+  }
+
+  async addLog(input: Omit<PublicationLog, 'id' | 'timestamp'>): Promise<PublicationLog> {
+    const log: PublicationLog = { ...input, id: randomUUID(), timestamp: new Date().toISOString() };
+    return this.db.mutate((db) => { db.logs.push(log); return log; });
+  }
+  async listLogs() { return (await this.db.read()).logs; }
+  async findSuccessfulLog(idempotencyKey: string) {
+    return (await this.db.read()).logs.find((x) => x.idempotencyKey === idempotencyKey && x.result === 'SUCCESS');
+  }
+}

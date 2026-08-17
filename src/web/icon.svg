@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0b1f3a"/>
+  <path d="M145 286c-45 0-81-34-81-77 0-39 30-72 69-77 14-54 62-92 119-92 62 0 113 45 122 104 42 3 74 36 74 77 0 43-36 78-81 78H145z" fill="#f5f0e7"/>
+  <text x="256" y="258" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="112" fill="#0b1f3a">GW</text>
+  <circle cx="176" cy="367" r="19" fill="#c59b3b"/><circle cx="256" cy="396" r="19" fill="#c59b3b"/><circle cx="336" cy="367" r="19" fill="#c59b3b"/>
+</svg>
