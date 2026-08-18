@@ -19,15 +19,9 @@ npm run build
 npm start
 ```
 
-ثم افتح:
-
-```text
-http://localhost:3000
-```
+ثم افتح `http://localhost:3000`.
 
 ## قاعدة البيانات الدائمة للإنتاج
-
-للنسخة المنشورة استخدم PostgreSQL:
 
 ```env
 STORAGE_DRIVER=postgres
@@ -36,54 +30,71 @@ DATABASE_SSL=true
 DATABASE_SSL_REJECT_UNAUTHORIZED=true
 ```
 
-إذا كانت خدمة PostgreSQL التي اخترتها تطلب اتصال SSL بشهادة لا يمكن التحقق منها في بيئتك، غيّر `DATABASE_SSL_REJECT_UNAUTHORIZED=false` فقط وفق تعليمات مزود قاعدة البيانات.
-
-إذا تركت `STORAGE_DRIVER` فارغًا ووجد `DATABASE_URL`، يختار التطبيق PostgreSQL تلقائيًا. بدون `DATABASE_URL` يعود تلقائيًا إلى `JsonDb` المحلي.
-
-يمكن التحقق من الاتصال عبر:
-
-```text
-GET /api/health
-```
-
-حيث يقوم الفحص بقراءة طبقة التخزين فعلًا قبل إرجاع `ok: true`.
-
-إذا كانت لديك بيانات سابقة في `data/db.json` وتريد نقلها إلى PostgreSQL، نفّذ بعد ضبط `.env`:
-
-```bash
-npm run migrate:postgres
-```
-
-لن تستبدل أداة الترحيل بيانات PostgreSQL الموجودة إلا إذا وضعت `MIGRATION_FORCE=true` صراحةً.
+يمكن التحقق من الاتصال عبر `GET /api/health`.
 
 ## ClickUp وبوابة النشر
 
 ```env
 PUBLISH_MODE=clickup_watch
 CLICKUP_LIST_ID=901524471002
-CLICKUP_API_TOKEN=ضع_التوكن_هنا
+CLICKUP_API_TOKEN=
 ```
 
-يمكن ترك Make متوقفًا أثناء تجهيز بقية التكاملات. لا تعتمد مرحلة صناعة المحتوى أو الأصول على تشغيل Make.
-
-عند تفعيل النشر لاحقًا يعود المسار إلى:
-
-`IN REVIEW → موافقة → ClickUp READY → Make Watch Tasks → المنصة → ClickUp PUBLISHED`
+يمكن ترك Make متوقفًا أثناء تجهيز بقية التكاملات. المسار الحالي للأصول لا يعتمد على Make.
 
 ## OpenAI
 
-يستخدمه التطبيق لاستخراج الفرص وصناعة حزم المحتوى:
+يستخدم للذكاء وصناعة النصوص والبرومبتات، وليس كمصنع الأصول الرئيسي:
 
 ```env
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-5.6
 ```
 
-لا يوضع المفتاح في الواجهة أو GitHub؛ يبقى في متغيرات بيئة الخادم فقط.
+## Canva — مصنع الأصول الرئيسي
+
+Canva هو المصدر الأساسي للصور، Carousel، القوالب، Video Designs والتصدير النهائي.
+
+```env
+CANVA_ACCESS_TOKEN=
+CANVA_BRAND_KIT_ID=kAHON_7IACY
+CANVA_SOCIAL_TEMPLATE_ID=
+CANVA_CAROUSEL_TEMPLATE_ID=
+CANVA_VIDEO_TEMPLATE_ID=
+CANVA_VIDEO_EXPORT_QUALITY=vertical_1080p
+CANVA_AUTOFILL_TITLE_FIELD=TITLE
+CANVA_AUTOFILL_BODY_FIELD=BODY
+CANVA_AUTOFILL_CTA_FIELD=CTA
+CANVA_AUTOFILL_MEDIA_FIELD=MEDIA
+```
+
+التسلسل المعتمد:
+
+`Content Package → Canva Brand Template → Autofill → Canva Design → Export PNG/MP4 → Google Drive → Content Assets`
+
+القوالب المطلوبة داخل Canva:
+
+1. Social Template للصورة المفردة.
+2. Carousel Template متعدد الصفحات.
+3. Video Template عمودي 9:16 للفيديوهات القصيرة.
+
+ويُفضّل أن تستخدم القوالب حقول Autofill القياسية:
+
+- `TITLE`
+- `BODY`
+- `CTA`
+- `MEDIA`
+
+إذا لم يكن Template ID مضبوطًا بعد، ينشئ النظام Design قابلًا للتحرير كحل مرحلي، لكنه لا يعتبر ذلك النسخة النهائية المعتمدة للقالب.
+
+Canva هو المسؤول عن التصدير النهائي:
+
+- Social/Carousel → PNG
+- Video → MP4 (`vertical_1080p` افتراضيًا)
 
 ## Google Drive
 
-للإنتاج طويل المدى يفضّل OAuth refresh credentials بدل Access Token مؤقت:
+يحفظ النسخ المصدرة من Canva وملف Manifest حتى لا نعتمد على روابط Canva المؤقتة:
 
 ```env
 GOOGLE_DRIVE_CLIENT_ID=
@@ -92,23 +103,11 @@ GOOGLE_DRIVE_REFRESH_TOKEN=
 GOOGLE_DRIVE_FOLDER_ID=
 ```
 
-ويبقى `GOOGLE_DRIVE_ACCESS_TOKEN` متاحًا للاختبار اليدوي القصير فقط. يجدد التطبيق Access Token تلقائيًا عندما تكون بيانات refresh مكتملة.
+ويبقى `GOOGLE_DRIVE_ACCESS_TOKEN` مناسبًا للاختبار القصير فقط.
 
-## Semrush
+## HeyGen — اختياري
 
-التكامل الجديد يستخدم Keyword Metrics API v4:
-
-```env
-SEMRUSH_API_URL=https://api.semrush.com/apis/v4/keywords/v1/metrics
-SEMRUSH_API_KEY=
-SEMRUSH_COUNTRY=TN
-```
-
-لا ينفذ التطبيق طلب Semrush ما لم يوجد المفتاح ويُطلب إثراء كلمة مفتاحية.
-
-## HeyGen
-
-يمكن تشغيل HeyGen مباشرة من التطبيق دون Make:
+HeyGen ليس Renderer أساسيًا. يستخدم فقط عند طلب Avatar/Talking Head، ثم يمكن إدخال الناتج لاحقًا في Canva.
 
 ```env
 HEYGEN_API_KEY=
@@ -118,55 +117,14 @@ HEYGEN_VOICE_ID=
 HEYGEN_AVATAR_TYPE=photo_avatar
 ```
 
-إذا كان الحساب يستخدم Photo Avatar، يحوّل التطبيق المعرّف إلى `talking_photo_id` ويرسل الفيديو مباشرة إلى HeyGen V2. يبقى `HEYGEN_AUTOMATION_WEBHOOK_URL` مدعومًا كخيار رجوع فقط.
-
-## Canva
-
-يدعم التطبيق الآن فحص اتصال Canva Connect API وإنشاء Design shell مباشر عند توفر:
+## Semrush
 
 ```env
-CANVA_ACCESS_TOKEN=
+SEMRUSH_API_URL=https://api.semrush.com/apis/v4/keywords/v1/metrics
+SEMRUSH_API_KEY=
+SEMRUSH_COUNTRY=TN
 ```
-
-كما يبقى `CANVA_AUTOMATION_WEBHOOK_URL` مدعومًا كخيار رجوع. للوصول الإنتاجي الدائم يجب الانتقال إلى OAuth 2.0 مع حفظ وتجديد التوكنات؛ لا تعتمد على Access Token ثابت طويل المدى.
-
-## مزامنة نتائج Make مع Dashboard التطبيق
-
-اختياريًا، بعد إعادة تشغيل Make لاحقًا، يمكن إضافة طلب HTTP إلى:
-
-```text
-POST /api/webhooks/make
-```
-
-Body:
-
-```json
-{
-  "contentId": "...",
-  "platform": "facebook",
-  "result": "SUCCESS",
-  "publicUrl": "https://...",
-  "executionId": "...",
-  "attempt": 1
-}
-```
-
-إذا استُخدم `MAKE_WEBHOOK_SECRET` أرسل نفس القيمة في Header باسم:
-
-```text
-X-Ghaith-Webhook-Secret
-```
-
-## إضافة منصة جديدة
-
-أضف اسمها فقط إلى:
-
-```env
-SUPPORTED_PLATFORMS=facebook,instagram,tiktok,pinterest,youtube,x,threads
-```
-
-ثم أضف Route مقابلة في محرك النشر عند تفعيله. لا يلزم تعديل Core التطبيق.
 
 ## ملاحظة الأمان
 
-لا تضع أي API Key أو OAuth secret أو كلمة مرور قاعدة بيانات داخل الواجهة أو ملفات JavaScript. جميع الأسرار تبقى في متغيرات البيئة على الخادم.
+لا تضع أي API Key أو OAuth secret أو كلمة مرور قاعدة بيانات داخل الواجهة أو GitHub. جميع الأسرار تبقى في متغيرات البيئة على الخادم.
