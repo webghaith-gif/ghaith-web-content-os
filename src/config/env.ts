@@ -61,9 +61,20 @@ export const env = {
   SEMRUSH_API_KEY: process.env.SEMRUSH_API_KEY?.trim() || undefined,
   SEMRUSH_COUNTRY: (process.env.SEMRUSH_COUNTRY?.trim() || 'TN').toUpperCase(),
 
+  // Canva is the primary asset factory for stills, carousels, templates and video designs.
   CANVA_ACCESS_TOKEN: process.env.CANVA_ACCESS_TOKEN?.trim() || undefined,
+  CANVA_BRAND_KIT_ID: process.env.CANVA_BRAND_KIT_ID?.trim() || 'kAHON_7IACY',
+  CANVA_SOCIAL_TEMPLATE_ID: process.env.CANVA_SOCIAL_TEMPLATE_ID?.trim() || undefined,
+  CANVA_CAROUSEL_TEMPLATE_ID: process.env.CANVA_CAROUSEL_TEMPLATE_ID?.trim() || undefined,
+  CANVA_VIDEO_TEMPLATE_ID: process.env.CANVA_VIDEO_TEMPLATE_ID?.trim() || undefined,
+  CANVA_VIDEO_EXPORT_QUALITY: process.env.CANVA_VIDEO_EXPORT_QUALITY?.trim() || 'vertical_1080p',
+  CANVA_AUTOFILL_TITLE_FIELD: process.env.CANVA_AUTOFILL_TITLE_FIELD?.trim() || 'TITLE',
+  CANVA_AUTOFILL_BODY_FIELD: process.env.CANVA_AUTOFILL_BODY_FIELD?.trim() || 'BODY',
+  CANVA_AUTOFILL_CTA_FIELD: process.env.CANVA_AUTOFILL_CTA_FIELD?.trim() || 'CTA',
+  CANVA_AUTOFILL_MEDIA_FIELD: process.env.CANVA_AUTOFILL_MEDIA_FIELD?.trim() || 'MEDIA',
   CANVA_AUTOMATION_WEBHOOK_URL: optionalUrl('CANVA_AUTOMATION_WEBHOOK_URL'),
 
+  // HeyGen is optional: avatar/voice raw video source that can be fed into Canva.
   HEYGEN_API_KEY: process.env.HEYGEN_API_KEY?.trim() || undefined,
   HEYGEN_API_URL: optionalUrl('HEYGEN_API_URL') ?? 'https://api.heygen.com',
   HEYGEN_AVATAR_ID: process.env.HEYGEN_AVATAR_ID?.trim() || undefined,
