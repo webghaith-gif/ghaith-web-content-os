@@ -40,6 +40,17 @@ export interface Opportunity {
   createdAt: string;
 }
 
+export interface CarouselSlideContent {
+  title?: string;
+  body?: string;
+  points?: string[];
+}
+
+export interface VideoSceneContent {
+  title?: string;
+  body?: string;
+}
+
 export interface ContentPackage {
   hook?: string;
   caption?: string;
@@ -49,6 +60,10 @@ export interface ContentPackage {
   keywords?: string[];
   imagePrompt?: string;
   videoPrompt?: string;
+  /** Structured 5-page carousel data for Canva Autofill. */
+  carouselSlides?: CarouselSlideContent[];
+  /** Structured 3-scene vertical video data for Canva Autofill. */
+  videoScenes?: VideoSceneContent[];
 }
 
 export interface AssetRef {
