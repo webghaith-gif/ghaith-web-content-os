@@ -3,7 +3,7 @@ export function safeStartupDiagnostic(error: unknown) {
   const redacted = raw
     .replace(/postgres(?:ql)?:\/\/[^\s"']+/gi, '[REDACTED_DATABASE_URL]')
     .replace(/https?:\/\/[^\s"']+/gi, '[REDACTED_URL]')
-    .replace(/(?:password|token|secret|api[_-]?key)\s*[=:]\s*[^\s,;]+/gi, '$1=[REDACTED]');
+    .replace(/(password|token|secret|api[_-]?key)\s*[=:]\s*[^\s,;]+/gi, '$1=[REDACTED]');
 
   return {
     ok: false,
