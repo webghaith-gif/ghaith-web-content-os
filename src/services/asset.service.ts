@@ -5,12 +5,22 @@ import { GoogleDriveAdapter } from '../integrations/google-drive.adapter';
 import type { AssetRef, ContentItem } from '../core/types';
 
 export class AssetService {
+  private readonly canva: CanvaAdapter;
+  private readonly heygen: HeyGenAdapter;
+  private readonly drive: GoogleDriveAdapter;
+
   constructor(
     private readonly store: Store,
-    private readonly canva = new CanvaAdapter(),
-    private readonly heygen = new HeyGenAdapter(),
-    private readonly drive = new GoogleDriveAdapter(),
-  ) {}
+    canva?: CanvaAdapter,
+    heygen?: HeyGenAdapter,
+    drive?: GoogleDriveAdapter,
+  ) {
+    // Important: Canva must share the same Store so OAuth tokens persisted in Neon
+    // are available to the asset factory and can be refreshed automatically.
+    this.canva = canva ?? new CanvaAdapter(store);
+    this.heygen = heygen ?? new HeyGenAdapter();
+    this.drive = drive ?? new GoogleDriveAdapter();
+  }
 
   async requestAssets(contentId: string) {
     const content = await this.store.getContent(contentId);
