@@ -1,8 +1,8 @@
 import { Store } from '../repositories/store';
-import { CanvaAdapter, type CanvaDesignResult } from '../integrations/canva.adapter';
+import { CanvaAdapter, type CanvaAssetKind, type CanvaDesignResult } from '../integrations/canva.adapter';
 import { HeyGenAdapter } from '../integrations/heygen.adapter';
 import { GoogleDriveAdapter } from '../integrations/google-drive.adapter';
-import type { AssetRef } from '../core/types';
+import type { AssetRef, ContentItem } from '../core/types';
 
 export class AssetService {
   constructor(
@@ -26,23 +26,39 @@ export class AssetService {
         })
       : undefined;
 
-    const design = await this.canva.requestDesign({
-      contentId,
-      title: content.title,
-      contentType: content.contentType,
-      caption: content.package.caption,
-      body: content.package.description,
-      cta: content.package.cta,
-      imagePrompt: content.package.imagePrompt,
-      videoPrompt: content.package.videoPrompt,
-      script: content.package.script,
-      platforms: content.platforms,
-      avatarVideo,
-    });
+    const designs: CanvaDesignResult[] = [];
+    const designErrors: Array<{ kind: CanvaAssetKind; message: string }> = [];
+    for (const assetKind of desiredCanvaKinds(content)) {
+      try {
+        const result = await this.canva.requestDesign({
+          assetKind,
+          contentId,
+          title: content.title,
+          hook: content.package.hook,
+          contentType: content.contentType,
+          caption: content.package.caption,
+          body: content.package.description,
+          cta: content.package.cta,
+          imagePrompt: content.package.imagePrompt,
+          videoPrompt: content.package.videoPrompt,
+          script: content.package.script,
+          carouselSlides: content.package.carouselSlides,
+          videoScenes: content.package.videoScenes,
+          platforms: content.platforms,
+          avatarVideo,
+        });
+        if (isCanvaDesignResult(result)) designs.push(result);
+      } catch (error) {
+        designErrors.push({
+          kind: assetKind,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     const newAssets: AssetRef[] = [];
     const newDriveUrls: string[] = [];
-    if (isCanvaDesignResult(design)) {
+    for (const design of designs) {
       const kind = design.kind === 'video' ? 'video' : design.kind === 'carousel' ? 'carousel' : 'image';
       const canvaUrl = design.editUrl || design.viewUrl;
       if (canvaUrl) newAssets.push({ kind, url: canvaUrl, provider: 'canva', providerId: design.designId });
@@ -63,7 +79,9 @@ export class AssetService {
       contentId,
       title: content.title,
       primaryAssetFactory: 'canva',
-      design,
+      requestedKinds: desiredCanvaKinds(content),
+      designs,
+      designErrors,
       optionalAvatarSource: avatarVideo,
       generatedAt: new Date().toISOString(),
     }, null, 2);
@@ -75,6 +93,26 @@ export class AssetService {
       googleDriveUrls: [...content.googleDriveUrls, ...newDriveUrls],
     });
   }
+}
+
+function desiredCanvaKinds(content: ContentItem): CanvaAssetKind[] {
+  const platforms = new Set(content.platforms.map((x) => x.toLowerCase()));
+  const kinds: CanvaAssetKind[] = [];
+  if ([...platforms].some((p) => ['facebook', 'instagram', 'pinterest', 'x'].includes(p))) kinds.push('social');
+  if (
+    Array.isArray(content.package.carouselSlides)
+    && content.package.carouselSlides.length >= 2
+    && [...platforms].some((p) => ['facebook', 'instagram'].includes(p))
+  ) kinds.push('carousel');
+  const type = (content.contentType ?? '').toLowerCase();
+  if (
+    [...platforms].some((p) => ['tiktok', 'youtube'].includes(p))
+    || type.includes('video')
+    || type.includes('reel')
+    || type.includes('short')
+  ) kinds.push('video');
+  if (kinds.length === 0) kinds.push('social');
+  return kinds;
 }
 
 function wantsAvatar(contentType?: string, prompt?: string): boolean {
