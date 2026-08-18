@@ -1,5 +1,5 @@
 
-declare const process: { env: Record<string, string | undefined>; exitCode?: number };
+declare const process: { env: Record<string, string | undefined>; exitCode?: number; version: string };
 declare const __dirname: string;
 declare const Buffer: any;
 type Buffer = any;
@@ -19,5 +19,6 @@ declare module "pg" {
     query<T = any>(text: string, values?: unknown[]): Promise<{ rows: T[] }>;
     connect(): Promise<{ query<T = any>(text: string, values?: unknown[]): Promise<{ rows: T[] }>; release(): void }>;
     end(): Promise<void>;
+    on?(event: string, listener: (error: Error) => void): void;
   }
 }
