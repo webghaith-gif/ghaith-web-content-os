@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
-const source = await readFile(new URL('../src/application.ts', import.meta.url), 'utf8');
+const source = readFileSync(path.join(process.cwd(), 'src', 'application.ts'), 'utf8');
 
 test('integration health routes exist for direct services', () => {
   for (const route of [
