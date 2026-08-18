@@ -40,6 +40,8 @@ export const env = {
 
   OPENAI_API_KEY: process.env.OPENAI_API_KEY?.trim() || undefined,
   OPENAI_MODEL: process.env.OPENAI_MODEL?.trim() || 'gpt-5.6',
+  OPENAI_IMAGE_MODEL: process.env.OPENAI_IMAGE_MODEL?.trim() || 'gpt-image-2',
+  OPENAI_IMAGE_QUALITY: (process.env.OPENAI_IMAGE_QUALITY?.trim() || 'medium').toLowerCase(),
 
   CLICKUP_API_TOKEN: process.env.CLICKUP_API_TOKEN?.trim() || undefined,
   CLICKUP_LIST_ID: process.env.CLICKUP_LIST_ID?.trim() || '901524471002',
