@@ -69,6 +69,10 @@ export function createApp() {
           },
         });
       }
+      if (url.pathname === '/api/integrations/clickup/test' && method === 'GET') {
+        const probe = await integrations.clickup.testConnection();
+        return sendJson(res, probe.ok ? 200 : 503, probe);
+      }
 
       if (url.pathname === '/api/reports' && method === 'GET') return sendJson(res, 200, await store.listReports());
       if (url.pathname === '/api/reports' && method === 'POST') {
