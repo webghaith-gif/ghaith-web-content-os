@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { createApp } from './app';
+import { createApp } from './application';
 import { env } from './config/env';
 import { safeStartupDiagnostic } from './utils/startup-diagnostic';
 
