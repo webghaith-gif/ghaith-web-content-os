@@ -2,9 +2,43 @@ import { env } from '../config/env';
 import { fetchJson } from '../utils/http';
 
 interface ClickUpTaskResponse { id: string; url?: string; status?: { status?: string } | string; }
+interface ClickUpListResponse { id: string; name?: string; }
+
+export interface ClickUpConnectionProbe {
+  ok: boolean;
+  enabled: boolean;
+  listId?: string;
+  listName?: string;
+  reason?: 'NOT_CONFIGURED' | 'CONNECTION_FAILED';
+}
 
 export class ClickUpAdapter {
   get enabled() { return Boolean(env.CLICKUP_API_TOKEN && env.CLICKUP_LIST_ID); }
+
+  async testConnection(): Promise<ClickUpConnectionProbe> {
+    if (!env.CLICKUP_API_TOKEN || !env.CLICKUP_LIST_ID) {
+      return { ok: false, enabled: false, reason: 'NOT_CONFIGURED' };
+    }
+
+    try {
+      const list = await fetchJson<ClickUpListResponse>(`https://api.clickup.com/api/v2/list/${env.CLICKUP_LIST_ID}`, {
+        headers: { Authorization: env.CLICKUP_API_TOKEN },
+      });
+      return {
+        ok: true,
+        enabled: true,
+        listId: list.id,
+        listName: list.name,
+      };
+    } catch {
+      return {
+        ok: false,
+        enabled: true,
+        listId: env.CLICKUP_LIST_ID,
+        reason: 'CONNECTION_FAILED',
+      };
+    }
+  }
 
   async createContentTask(name: string, description: string, status = 'draft'): Promise<ClickUpTaskResponse | undefined> {
     if (!env.CLICKUP_API_TOKEN || !env.CLICKUP_LIST_ID) return undefined;
