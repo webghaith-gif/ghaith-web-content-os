@@ -1,4 +1,7 @@
 import { cp, mkdir, rm } from 'node:fs/promises';
-await rm('dist/src/web', { recursive: true, force: true });
-await mkdir('dist/src/web', { recursive: true });
-await cp('src/web', 'dist/src/web', { recursive: true });
+
+for (const target of ['dist/src/web', 'public']) {
+  await rm(target, { recursive: true, force: true });
+  await mkdir(target, { recursive: true });
+  await cp('src/web', target, { recursive: true });
+}
