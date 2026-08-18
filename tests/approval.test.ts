@@ -8,14 +8,15 @@ import { JsonDb } from '../src/repositories/json-db';
 
 function tempStore() { return new Store(new JsonDb(path.join(os.tmpdir(), `ghaith-${crypto.randomUUID()}.json`))); }
 
-test('Approval Gate moves IN_REVIEW to READY', async () => {
+test('Approval Gate moves IN_REVIEW to READY without external handoff', async () => {
   const store = tempStore();
   const content = await store.createContent({ title:'A', topic:'A', platforms:['facebook'], package:{}, assets:[], googleDriveUrls:[], status:'IN_REVIEW' });
-  const clickup = { updateStatus: async () => undefined } as any;
-  const service = new ApprovalService(store, clickup);
+  const service = new ApprovalService(store);
   const ready = await service.approve(content.id, 'owner');
   assert.equal(ready.status, 'READY');
   assert.equal(ready.approvedBy, 'owner');
+  assert.equal(ready.clickupTaskId, undefined);
+  assert.equal(ready.clickupTaskIds, undefined);
 });
 
 test('Approval Gate rejects content before READY', async () => {

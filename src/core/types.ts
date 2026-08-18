@@ -71,7 +71,10 @@ export interface ContentItem {
   package: ContentPackage;
   assets: AssetRef[];
   googleDriveUrls: string[];
+  /** Legacy single-task link retained for backward compatibility. */
   clickupTaskId?: string;
+  /** Canonical ClickUp publishing task per target platform. */
+  clickupTaskIds?: Record<string, string>;
   status: ContentStatus;
   approvedAt?: string;
   approvedBy?: string;

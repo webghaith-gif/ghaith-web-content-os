@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
-import type { PublicationLog, PublishRequest, PublishResult } from '../core/types';
+import type { ContentItem, PublicationLog, PublishRequest, PublishResult } from '../core/types';
 import { AppError } from '../core/errors';
 import { Store } from '../repositories/store';
 import { ApprovalService } from './approval.service';
 import { PlatformRegistry } from '../platforms/registry';
 import { ClickUpAdapter } from '../integrations/clickup.adapter';
 import { env } from '../config/env';
+import { buildClickUpWatchPlans } from './clickup-watch-contract';
 
 export class PublishingOrchestrator {
   constructor(
@@ -20,26 +21,64 @@ export class PublishingOrchestrator {
     this.approval.ensureReady(content);
     if (content.platforms.length === 0) throw new AppError('Content has no target platforms.', 400);
 
-    // This is the default because it mirrors the real Ghaith Web workflow:
-    // approving the ClickUp task to READY is the handoff; Make Watch Tasks takes it from there.
+    // Ghaith Web's practical publishing mode: ClickUp task prefixes are the Make router trigger.
+    // Never expose [FB]/[IG]/[TT]/[PIN]/[YT] until every target task has passed preflight and has its media attached.
     if (env.PUBLISH_MODE === 'clickup_watch') {
-      if (!content.clickupTaskId || !this.clickup.enabled) {
+      if (!this.clickup.enabled) {
         return {
           contentId,
           published: false,
           dispatched: false,
           mode: 'clickup_watch',
-          warning: 'ClickUp is not connected or this content has no ClickUp task. Configure CLICKUP_API_TOKEN and CLICKUP_LIST_ID first.',
+          warning: 'ClickUp is not connected. Configure CLICKUP_API_TOKEN; the canonical list ID is already built in.',
           results: [],
         };
       }
-      await this.clickup.updateStatus(content.clickupTaskId, env.CLICKUP_STATUS_READY);
+
+      // Pure preflight happens before any ClickUp mutation. X/future platforms are rejected here until Make has a route.
+      const plans = buildClickUpWatchPlans(content);
+      const taskIds: Record<string, string> = { ...(content.clickupTaskIds ?? {}) };
+
+      // Stage every task behind a neutral HOLD name. Make's current router cannot match these names.
+      for (const plan of plans) {
+        if (taskIds[plan.platform]) continue;
+
+        const task = await this.clickup.createContentTask(plan.holdName, plan.description, env.CLICKUP_STATUS_IN_REVIEW);
+        if (!task?.id) throw new AppError(`ClickUp did not create a task for ${plan.platform}.`, 502, 'CLICKUP_HANDOFF_FAILED');
+
+        try {
+          await this.clickup.attachTaskFileFromUrl(task.id, plan.asset.url, plan.fileName);
+        } catch (error) {
+          // A task without the expected attachment must never become routable by Make.
+          try { await this.clickup.updateStatus(task.id, 'archived'); } catch { /* best-effort quarantine */ }
+          throw new AppError(
+            `Failed to attach ${plan.platform} media: ${error instanceof Error ? error.message : String(error)}`,
+            502,
+            'CLICKUP_ATTACHMENT_FAILED',
+          );
+        }
+
+        taskIds[plan.platform] = task.id;
+        await this.store.updateContent(content.id, {
+          clickupTaskIds: { ...taskIds },
+          clickupTaskId: content.clickupTaskId ?? task.id,
+        });
+      }
+
+      // Only now reveal the platform prefix and READY status. Name + description + status are one ClickUp update.
+      for (const plan of plans) {
+        const taskId = taskIds[plan.platform];
+        if (!taskId) throw new AppError(`Missing staged ClickUp task for ${plan.platform}.`, 500, 'CLICKUP_HANDOFF_FAILED');
+        await this.clickup.finalizeTask(taskId, plan.finalName, plan.description, env.CLICKUP_STATUS_READY);
+      }
+
       return {
         contentId,
         published: false,
         dispatched: true,
         mode: 'clickup_watch',
-        message: 'Content is READY in ClickUp. The existing Make Watch Tasks scenario can pick it up.',
+        message: 'Platform-specific ClickUp tasks passed preflight, received media, and are now READY for the fixed Make Watch Tasks scenario.',
+        tasks: plans.map((plan) => ({ platform: plan.platform, taskId: taskIds[plan.platform] })),
         results: [],
       };
     }
@@ -52,14 +91,15 @@ export class PublishingOrchestrator {
     let hadDryRun = false;
 
     for (const platform of content.platforms) {
-      const key = idempotencyKey(content.id, platform, content.revision);
+      const normalizedPlatform = platform.toLowerCase();
+      const key = idempotencyKey(content.id, normalizedPlatform, content.revision);
       const previous = await this.store.findSuccessfulLog(key);
       if (previous) { results.push(previous); continue; }
 
       const payload: PublishRequest = {
         contentId: content.id,
-        clickupTaskId: content.clickupTaskId,
-        platform,
+        clickupTaskId: platformTaskId(content, normalizedPlatform),
+        platform: normalizedPlatform,
         title: content.title,
         caption: content.package.caption,
         description: content.package.description,
@@ -70,14 +110,14 @@ export class PublishingOrchestrator {
       };
 
       try {
-        const response = await this.platforms.get(platform).publish(payload);
+        const response = await this.platforms.get(normalizedPlatform).publish(payload);
         hadDryRun ||= Boolean(response.dryRun);
         const result = response.success ? (response.warning ? 'WARNING' : 'SUCCESS') : 'ERROR';
         results.push(await this.store.addLog({
           contentId: content.id,
-          platform,
+          platform: normalizedPlatform,
           result,
-          originalTaskId: content.clickupTaskId,
+          originalTaskId: platformTaskId(content, normalizedPlatform),
           makeExecutionId: response.executionId,
           attempt: 1,
           publicUrl: response.publicUrl,
@@ -88,9 +128,9 @@ export class PublishingOrchestrator {
       } catch (error) {
         results.push(await this.store.addLog({
           contentId: content.id,
-          platform,
+          platform: normalizedPlatform,
           result: 'ERROR',
-          originalTaskId: content.clickupTaskId,
+          originalTaskId: platformTaskId(content, normalizedPlatform),
           attempt: env.PUBLISH_MAX_RETRIES + 1,
           errorMessage: error instanceof Error ? error.message : String(error),
           processed: true,
@@ -103,7 +143,7 @@ export class PublishingOrchestrator {
     const livePublished = allCompleted && !hadDryRun;
     if (livePublished) {
       const updated = await this.store.updateContent(content.id, { status: 'PUBLISHED', publishedAt: new Date().toISOString() });
-      if (updated.clickupTaskId) await this.clickup.updateStatus(updated.clickupTaskId, env.CLICKUP_STATUS_PUBLISHED);
+      await markClickUpTasksPublished(updated, this.clickup);
     }
 
     return { contentId, published: livePublished, dryRun: hadDryRun, mode: 'webhook', results };
@@ -130,7 +170,7 @@ export class PublishingOrchestrator {
       contentId: content.id,
       platform,
       result: input.result,
-      originalTaskId: content.clickupTaskId,
+      originalTaskId: platformTaskId(content, platform),
       makeExecutionId: input.executionId,
       attempt: input.attempt ?? 1,
       publicUrl: input.publicUrl,
@@ -145,7 +185,7 @@ export class PublishingOrchestrator {
     const allDone = content.platforms.every(platformDone);
     if (allDone && content.status !== 'PUBLISHED') {
       const updated = await this.store.updateContent(content.id, { status: 'PUBLISHED', publishedAt: new Date().toISOString() });
-      if (updated.clickupTaskId && this.clickup.enabled) await this.clickup.updateStatus(updated.clickupTaskId, env.CLICKUP_STATUS_PUBLISHED);
+      await markClickUpTasksPublished(updated, this.clickup);
     }
     return { log, content: await this.store.getContent(content.id) };
   }
@@ -153,4 +193,17 @@ export class PublishingOrchestrator {
 
 function idempotencyKey(contentId: string, platform: string, revision: number): string {
   return createHash('sha256').update(`${contentId}:${platform.toLowerCase()}:${revision}`).digest('hex');
+}
+
+function platformTaskId(content: ContentItem, platform: string): string | undefined {
+  return content.clickupTaskIds?.[platform.toLowerCase()] ?? content.clickupTaskId;
+}
+
+async function markClickUpTasksPublished(content: ContentItem, clickup: ClickUpAdapter): Promise<void> {
+  if (!clickup.enabled) return;
+  const ids = new Set<string>([
+    ...Object.values(content.clickupTaskIds ?? {}),
+    ...(content.clickupTaskId ? [content.clickupTaskId] : []),
+  ]);
+  for (const id of ids) await clickup.updateStatus(id, env.CLICKUP_STATUS_PUBLISHED);
 }
