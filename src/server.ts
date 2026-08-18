@@ -1,4 +1,4 @@
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createApp } from './app';
 import { env } from './config/env';
 import { safeStartupDiagnostic } from './utils/startup-diagnostic';
@@ -11,7 +11,7 @@ try {
   const diagnostic = safeStartupDiagnostic(error);
   console.error('Ghaith Web Content OS startup failed:', diagnostic);
 
-  createServer((req, res) => {
+  createServer((req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     const status = url.pathname === '/api/health' || url.pathname === '/api/startup-health' ? 503 : 500;
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
