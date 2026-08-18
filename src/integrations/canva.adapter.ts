@@ -1,4 +1,6 @@
 import { env } from '../config/env';
+import type { Store } from '../repositories/store';
+import { CanvaOAuthManager } from './canva-oauth';
 
 export type CanvaAssetKind = 'social' | 'carousel' | 'video';
 type CanvaSource = { type: 'design' | 'brand_template'; id: string };
@@ -6,7 +8,8 @@ type CanvaSource = { type: 'design' | 'brand_template'; id: string };
 export interface CanvaConnectionProbe {
   ok: boolean;
   enabled: boolean;
-  mode: 'api' | 'webhook' | 'none';
+  connected: boolean;
+  mode: 'access_token' | 'oauth' | 'webhook' | 'none';
   brandKitId?: string;
   sources: { social: boolean; carousel: boolean; video: boolean };
   message?: string;
@@ -33,17 +36,41 @@ interface CanvaJob<T = any> {
 }
 
 export class CanvaAdapter {
+  private readonly oauth?: CanvaOAuthManager;
+
+  constructor(store?: Store) {
+    this.oauth = store ? new CanvaOAuthManager(store) : undefined;
+  }
+
   get mode(): CanvaConnectionProbe['mode'] {
-    if (env.CANVA_ACCESS_TOKEN) return 'api';
+    if (env.CANVA_ACCESS_TOKEN) return 'access_token';
+    if (env.CANVA_CLIENT_ID && env.CANVA_CLIENT_SECRET && this.oauth) return 'oauth';
     if (env.CANVA_AUTOMATION_WEBHOOK_URL) return 'webhook';
     return 'none';
   }
 
   get enabled() { return this.mode !== 'none'; }
 
+  async oauthStatus() {
+    if (!this.oauth) return { configured: false, connected: Boolean(env.CANVA_ACCESS_TOKEN), authMode: env.CANVA_ACCESS_TOKEN ? 'access_token' : 'none', expiresAt: null };
+    return this.oauth.status();
+  }
+
+  async createAuthorizationUrl(redirectUri: string): Promise<string> {
+    if (!this.oauth) throw new Error('Canva OAuth storage is unavailable.');
+    return this.oauth.createAuthorizationUrl(redirectUri);
+  }
+
+  async handleOAuthCallback(code: string, state: string): Promise<void> {
+    if (!this.oauth) throw new Error('Canva OAuth storage is unavailable.');
+    await this.oauth.handleCallback(code, state);
+  }
+
   async testConnection(): Promise<CanvaConnectionProbe> {
+    const status = await this.oauthStatus();
     const base = {
       enabled: this.enabled,
+      connected: status.connected,
       mode: this.mode,
       brandKitId: env.CANVA_BRAND_KIT_ID,
       sources: {
@@ -54,8 +81,9 @@ export class CanvaAdapter {
     } as const;
     if (this.mode === 'none') return { ok: false, ...base, message: 'Canva is not configured.' };
     if (this.mode === 'webhook') return { ok: true, ...base };
+    if (!status.connected) return { ok: false, ...base, message: 'Canva OAuth is configured but not authorized yet.' };
     try {
-      const response = await this.api('/users/me');
+      const response = await this.api('/users/me/profile');
       if (!response.ok) return { ok: false, ...base, message: `Canva returned ${response.status}.` };
       return { ok: true, ...base };
     } catch (error) {
@@ -216,12 +244,13 @@ export class CanvaAdapter {
     throw new Error('Canva job timed out.');
   }
 
-  private api(path: string, init: RequestInit = {}) {
-    if (!env.CANVA_ACCESS_TOKEN) throw new Error('CANVA_ACCESS_TOKEN is not configured.');
+  private async api(path: string, init: RequestInit = {}) {
+    const token = env.CANVA_ACCESS_TOKEN ?? await this.oauth?.getAccessToken();
+    if (!token) throw new Error('Canva is not authorized. Use /api/integrations/canva/connect first.');
     return fetch(`https://api.canva.com/rest/v1${path}`, {
       ...init,
       headers: {
-        Authorization: `Bearer ${env.CANVA_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${token}`,
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
         ...(init.headers ?? {}),
       },

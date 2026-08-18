@@ -37,7 +37,7 @@ export function createApp() {
     make: new MakeAdapter(),
     googleDrive: new GoogleDriveAdapter(),
     semrush: new SemrushAdapter(),
-    canva: new CanvaAdapter(),
+    canva: new CanvaAdapter(store),
     heygen: new HeyGenAdapter(),
   };
 
@@ -70,13 +70,14 @@ export function createApp() {
         });
       }
       if (url.pathname === '/api/integrations' && method === 'GET') {
+        const canvaStatus = await integrations.canva.oauthStatus();
         return sendJson(res, 200, {
           OpenAI: { enabled: integrations.openai.enabled, model: env.OPENAI_MODEL },
           ClickUp: { enabled: integrations.clickup.enabled, listId: env.CLICKUP_LIST_ID },
           Make: { enabled: env.PUBLISH_MODE === 'webhook' ? integrations.make.enabled : false, paused: env.PUBLISH_MODE === 'clickup_watch' },
           GoogleDrive: { enabled: integrations.googleDrive.enabled, authMode: integrations.googleDrive.authMode, folderId: env.GOOGLE_DRIVE_FOLDER_ID ?? null },
           Semrush: integrations.semrush.configuration(),
-          Canva: { enabled: integrations.canva.enabled, mode: integrations.canva.mode },
+          Canva: { enabled: integrations.canva.enabled, mode: integrations.canva.mode, ...canvaStatus },
           HeyGen: { enabled: integrations.heygen.enabled, mode: integrations.heygen.mode, avatarConfigured: Boolean(env.HEYGEN_AVATAR_ID), voiceConfigured: Boolean(env.HEYGEN_VOICE_ID) },
         });
       }
@@ -95,6 +96,22 @@ export function createApp() {
       if (url.pathname === '/api/integrations/semrush/test' && method === 'GET') {
         const probe = integrations.semrush.configuration();
         return sendJson(res, probe.ok ? 200 : 503, { ...probe, note: 'Configuration check only; no Semrush API units are consumed.' });
+      }
+      if (url.pathname === '/api/integrations/canva/status' && method === 'GET') {
+        return sendJson(res, 200, await integrations.canva.oauthStatus());
+      }
+      if (url.pathname === '/api/integrations/canva/connect' && method === 'GET') {
+        const redirectUri = `${requestOrigin(req)}/api/integrations/canva/callback`;
+        const authorizationUrl = await integrations.canva.createAuthorizationUrl(redirectUri);
+        return sendJson(res, 200, { authorizationUrl, redirectUri });
+      }
+      if (url.pathname === '/api/integrations/canva/callback' && method === 'GET') {
+        const code = url.searchParams.get('code');
+        const state = url.searchParams.get('state');
+        if (!code || !state) throw new AppError('Canva callback requires code and state.', 400, 'VALIDATION_ERROR');
+        await integrations.canva.handleOAuthCallback(code, state);
+        res.writeHead(302, { Location: '/?canva=connected', 'Cache-Control': 'no-store' });
+        return res.end();
       }
       if (url.pathname === '/api/integrations/canva/test' && method === 'GET') {
         const probe = await integrations.canva.testConnection();
@@ -213,6 +230,11 @@ function editableContentPatch(body: Record<string, any>) {
   return Object.fromEntries(Object.entries(body).filter(([key]) => allowed.includes(key)));
 }
 
+function requestOrigin(req: IncomingMessage): string {
+  const forwarded = req.headers['x-forwarded-proto'];
+  const protocol = typeof forwarded === 'string' ? forwarded.split(',')[0]!.trim() : 'http';
+  return `${protocol}://${req.headers.host ?? 'localhost'}`;
+}
 function requireString(value: unknown, field: string): asserts value is string {
   if (typeof value !== 'string' || !value.trim()) throw new AppError(`${field} is required.`, 400, 'VALIDATION_ERROR');
 }

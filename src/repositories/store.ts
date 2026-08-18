@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ContentItem, Opportunity, PublicationLog, Report } from '../core/types';
 import { NotFoundError } from '../core/errors';
-import type { DatabaseBackend } from './database';
+import type { CanvaOAuthPendingState, CanvaOAuthTokenState, DatabaseBackend } from './database';
 
 export class Store {
   constructor(private readonly db: DatabaseBackend) {}
@@ -59,5 +59,24 @@ export class Store {
   async listLogs() { return (await this.db.read()).logs; }
   async findSuccessfulLog(idempotencyKey: string) {
     return (await this.db.read()).logs.find((x) => x.idempotencyKey === idempotencyKey && x.result === 'SUCCESS');
+  }
+
+  async getCanvaOAuthToken(): Promise<CanvaOAuthTokenState | undefined> {
+    return (await this.db.read()).integrations.canva?.token;
+  }
+  async setCanvaOAuthToken(token: CanvaOAuthTokenState | undefined): Promise<void> {
+    await this.db.mutate((db) => {
+      db.integrations.canva ??= {};
+      db.integrations.canva.token = token;
+    });
+  }
+  async getCanvaOAuthPending(): Promise<CanvaOAuthPendingState | undefined> {
+    return (await this.db.read()).integrations.canva?.pending;
+  }
+  async setCanvaOAuthPending(pending: CanvaOAuthPendingState | undefined): Promise<void> {
+    await this.db.mutate((db) => {
+      db.integrations.canva ??= {};
+      db.integrations.canva.pending = pending;
+    });
   }
 }
