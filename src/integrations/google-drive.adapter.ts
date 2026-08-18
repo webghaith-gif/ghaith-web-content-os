@@ -30,18 +30,29 @@ export class GoogleDriveAdapter {
 
   async uploadText(name: string, content: string, mimeType = 'text/plain'): Promise<DriveUploadResult | undefined> {
     if (!this.enabled) return undefined;
+    return this.uploadBytes(name, new TextEncoder().encode(content), mimeType);
+  }
 
+  async uploadFromUrl(name: string, url: string, mimeType?: string): Promise<DriveUploadResult | undefined> {
+    if (!this.enabled) return undefined;
+    const source = await fetch(url);
+    if (!source.ok) throw new Error(`Asset download failed: ${source.status} ${source.statusText}`);
+    const bytes = new Uint8Array(await source.arrayBuffer());
+    const detected = mimeType || source.headers.get('content-type') || 'application/octet-stream';
+    return this.uploadBytes(name, bytes, detected);
+  }
+
+  async uploadBytes(name: string, bytes: Uint8Array, mimeType: string): Promise<DriveUploadResult | undefined> {
+    if (!this.enabled) return undefined;
     const token = await this.getAccessToken();
     const boundary = `ghaith-${crypto.randomUUID()}`;
     const metadata = JSON.stringify({
       name,
       ...(env.GOOGLE_DRIVE_FOLDER_ID ? { parents: [env.GOOGLE_DRIVE_FOLDER_ID] } : {}),
     });
-    const body = [
-      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`,
-      `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n${content}\r\n`,
-      `--${boundary}--`,
-    ].join('');
+    const prefix = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`;
+    const suffix = `\r\n--${boundary}--`;
+    const body = new Blob([prefix, bytes, suffix]);
 
     const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
       method: 'POST',
