@@ -69,8 +69,39 @@ export function createApp() {
           },
         });
       }
+      if (url.pathname === '/api/integrations' && method === 'GET') {
+        return sendJson(res, 200, {
+          OpenAI: { enabled: integrations.openai.enabled, model: env.OPENAI_MODEL },
+          ClickUp: { enabled: integrations.clickup.enabled, listId: env.CLICKUP_LIST_ID },
+          Make: { enabled: env.PUBLISH_MODE === 'webhook' ? integrations.make.enabled : false, paused: env.PUBLISH_MODE === 'clickup_watch' },
+          GoogleDrive: { enabled: integrations.googleDrive.enabled, authMode: integrations.googleDrive.authMode, folderId: env.GOOGLE_DRIVE_FOLDER_ID ?? null },
+          Semrush: integrations.semrush.configuration(),
+          Canva: { enabled: integrations.canva.enabled, mode: integrations.canva.mode },
+          HeyGen: { enabled: integrations.heygen.enabled, mode: integrations.heygen.mode, avatarConfigured: Boolean(env.HEYGEN_AVATAR_ID), voiceConfigured: Boolean(env.HEYGEN_VOICE_ID) },
+        });
+      }
       if (url.pathname === '/api/integrations/clickup/test' && method === 'GET') {
         const probe = await integrations.clickup.testConnection();
+        return sendJson(res, probe.ok ? 200 : 503, probe);
+      }
+      if (url.pathname === '/api/integrations/openai/test' && method === 'GET') {
+        const probe = await integrations.openai.testConnection();
+        return sendJson(res, probe.ok ? 200 : 503, probe);
+      }
+      if (url.pathname === '/api/integrations/google-drive/test' && method === 'GET') {
+        const probe = await integrations.googleDrive.testConnection();
+        return sendJson(res, probe.ok ? 200 : 503, probe);
+      }
+      if (url.pathname === '/api/integrations/semrush/test' && method === 'GET') {
+        const probe = integrations.semrush.configuration();
+        return sendJson(res, probe.ok ? 200 : 503, { ...probe, note: 'Configuration check only; no Semrush API units are consumed.' });
+      }
+      if (url.pathname === '/api/integrations/canva/test' && method === 'GET') {
+        const probe = await integrations.canva.testConnection();
+        return sendJson(res, probe.ok ? 200 : 503, probe);
+      }
+      if (url.pathname === '/api/integrations/heygen/test' && method === 'GET') {
+        const probe = await integrations.heygen.testConnection();
         return sendJson(res, probe.ok ? 200 : 503, probe);
       }
 
