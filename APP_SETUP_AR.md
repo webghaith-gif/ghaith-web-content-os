@@ -56,7 +56,7 @@ npm run migrate:postgres
 
 لن تستبدل أداة الترحيل بيانات PostgreSQL الموجودة إلا إذا وضعت `MIGRATION_FORCE=true` صراحةً.
 
-## الإعداد الأنسب للمنظومة الحالية
+## ClickUp وبوابة النشر
 
 ```env
 PUBLISH_MODE=clickup_watch
@@ -64,15 +64,75 @@ CLICKUP_LIST_ID=901524471002
 CLICKUP_API_TOKEN=ضع_التوكن_هنا
 ```
 
-في هذا الوضع يعمل التطبيق هكذا:
+يمكن ترك Make متوقفًا أثناء تجهيز بقية التكاملات. لا تعتمد مرحلة صناعة المحتوى أو الأصول على تشغيل Make.
+
+عند تفعيل النشر لاحقًا يعود المسار إلى:
 
 `IN REVIEW → موافقة → ClickUp READY → Make Watch Tasks → المنصة → ClickUp PUBLISHED`
 
-ولا يحتاج التطبيق إلى استبدال سيناريو Make الحالي.
+## OpenAI
+
+يستخدمه التطبيق لاستخراج الفرص وصناعة حزم المحتوى:
+
+```env
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.6
+```
+
+لا يوضع المفتاح في الواجهة أو GitHub؛ يبقى في متغيرات بيئة الخادم فقط.
+
+## Google Drive
+
+للإنتاج طويل المدى يفضّل OAuth refresh credentials بدل Access Token مؤقت:
+
+```env
+GOOGLE_DRIVE_CLIENT_ID=
+GOOGLE_DRIVE_CLIENT_SECRET=
+GOOGLE_DRIVE_REFRESH_TOKEN=
+GOOGLE_DRIVE_FOLDER_ID=
+```
+
+ويبقى `GOOGLE_DRIVE_ACCESS_TOKEN` متاحًا للاختبار اليدوي القصير فقط. يجدد التطبيق Access Token تلقائيًا عندما تكون بيانات refresh مكتملة.
+
+## Semrush
+
+التكامل الجديد يستخدم Keyword Metrics API v4:
+
+```env
+SEMRUSH_API_URL=https://api.semrush.com/apis/v4/keywords/v1/metrics
+SEMRUSH_API_KEY=
+SEMRUSH_COUNTRY=TN
+```
+
+لا ينفذ التطبيق طلب Semrush ما لم يوجد المفتاح ويُطلب إثراء كلمة مفتاحية.
+
+## HeyGen
+
+يمكن تشغيل HeyGen مباشرة من التطبيق دون Make:
+
+```env
+HEYGEN_API_KEY=
+HEYGEN_API_URL=https://api.heygen.com
+HEYGEN_AVATAR_ID=
+HEYGEN_VOICE_ID=
+HEYGEN_AVATAR_TYPE=photo_avatar
+```
+
+إذا كان الحساب يستخدم Photo Avatar، يحوّل التطبيق المعرّف إلى `talking_photo_id` ويرسل الفيديو مباشرة إلى HeyGen V2. يبقى `HEYGEN_AUTOMATION_WEBHOOK_URL` مدعومًا كخيار رجوع فقط.
+
+## Canva
+
+يدعم التطبيق الآن فحص اتصال Canva Connect API وإنشاء Design shell مباشر عند توفر:
+
+```env
+CANVA_ACCESS_TOKEN=
+```
+
+كما يبقى `CANVA_AUTOMATION_WEBHOOK_URL` مدعومًا كخيار رجوع. للوصول الإنتاجي الدائم يجب الانتقال إلى OAuth 2.0 مع حفظ وتجديد التوكنات؛ لا تعتمد على Access Token ثابت طويل المدى.
 
 ## مزامنة نتائج Make مع Dashboard التطبيق
 
-اختياريًا، أضف في نهاية فروع Make طلب HTTP إلى:
+اختياريًا، بعد إعادة تشغيل Make لاحقًا، يمكن إضافة طلب HTTP إلى:
 
 ```text
 POST /api/webhooks/make
@@ -97,8 +157,6 @@ Body:
 X-Ghaith-Webhook-Secret
 ```
 
-عند اكتمال كل المنصات، يحدّث التطبيق المحتوى إلى `PUBLISHED` تلقائيًا.
-
 ## إضافة منصة جديدة
 
 أضف اسمها فقط إلى:
@@ -107,8 +165,8 @@ X-Ghaith-Webhook-Secret
 SUPPORTED_PLATFORMS=facebook,instagram,tiktok,pinterest,youtube,x,threads
 ```
 
-ثم أضف Route مقابلة في Make. لا يلزم تعديل Core التطبيق.
+ثم أضف Route مقابلة في محرك النشر عند تفعيله. لا يلزم تعديل Core التطبيق.
 
 ## ملاحظة الأمان
 
-لا تضع أي API Key أو كلمة مرور قاعدة بيانات داخل الواجهة أو ملفات JavaScript. جميع الأسرار تبقى في متغيرات البيئة على الخادم.
+لا تضع أي API Key أو OAuth secret أو كلمة مرور قاعدة بيانات داخل الواجهة أو ملفات JavaScript. جميع الأسرار تبقى في متغيرات البيئة على الخادم.
