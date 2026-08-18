@@ -37,22 +37,40 @@ export const env = {
   DATABASE_SSL_REJECT_UNAUTHORIZED: booleanEnv('DATABASE_SSL_REJECT_UNAUTHORIZED', true),
   PUBLISH_MAX_RETRIES: numberEnv('PUBLISH_MAX_RETRIES', 3),
   PUBLISH_RETRY_BASE_MS: numberEnv('PUBLISH_RETRY_BASE_MS', 500),
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-  OPENAI_MODEL: process.env.OPENAI_MODEL ?? 'gpt-5.6',
+
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY?.trim() || undefined,
+  OPENAI_MODEL: process.env.OPENAI_MODEL?.trim() || 'gpt-5.6',
+
   CLICKUP_API_TOKEN: process.env.CLICKUP_API_TOKEN?.trim() || undefined,
   CLICKUP_LIST_ID: process.env.CLICKUP_LIST_ID?.trim() || '901524471002',
   CLICKUP_STATUS_IN_REVIEW: process.env.CLICKUP_STATUS_IN_REVIEW?.trim() || 'in review',
   CLICKUP_STATUS_READY: process.env.CLICKUP_STATUS_READY?.trim() || 'ready',
   CLICKUP_STATUS_PUBLISHED: process.env.CLICKUP_STATUS_PUBLISHED?.trim() || 'published',
+
   PUBLISH_MODE: (process.env.PUBLISH_MODE ?? 'clickup_watch').trim().toLowerCase(),
   MAKE_WEBHOOK_URL: optionalUrl('MAKE_WEBHOOK_URL'),
-  MAKE_WEBHOOK_SECRET: process.env.MAKE_WEBHOOK_SECRET,
-  GOOGLE_DRIVE_ACCESS_TOKEN: process.env.GOOGLE_DRIVE_ACCESS_TOKEN,
-  GOOGLE_DRIVE_FOLDER_ID: process.env.GOOGLE_DRIVE_FOLDER_ID,
-  SEMRUSH_API_URL: optionalUrl('SEMRUSH_API_URL'),
-  SEMRUSH_API_KEY: process.env.SEMRUSH_API_KEY,
+  MAKE_WEBHOOK_SECRET: process.env.MAKE_WEBHOOK_SECRET?.trim() || undefined,
+
+  GOOGLE_DRIVE_ACCESS_TOKEN: process.env.GOOGLE_DRIVE_ACCESS_TOKEN?.trim() || undefined,
+  GOOGLE_DRIVE_CLIENT_ID: process.env.GOOGLE_DRIVE_CLIENT_ID?.trim() || undefined,
+  GOOGLE_DRIVE_CLIENT_SECRET: process.env.GOOGLE_DRIVE_CLIENT_SECRET?.trim() || undefined,
+  GOOGLE_DRIVE_REFRESH_TOKEN: process.env.GOOGLE_DRIVE_REFRESH_TOKEN?.trim() || undefined,
+  GOOGLE_DRIVE_FOLDER_ID: process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || undefined,
+
+  SEMRUSH_API_URL: optionalUrl('SEMRUSH_API_URL') ?? 'https://api.semrush.com/apis/v4/keywords/v1/metrics',
+  SEMRUSH_API_KEY: process.env.SEMRUSH_API_KEY?.trim() || undefined,
+  SEMRUSH_COUNTRY: (process.env.SEMRUSH_COUNTRY?.trim() || 'TN').toUpperCase(),
+
+  CANVA_ACCESS_TOKEN: process.env.CANVA_ACCESS_TOKEN?.trim() || undefined,
   CANVA_AUTOMATION_WEBHOOK_URL: optionalUrl('CANVA_AUTOMATION_WEBHOOK_URL'),
+
+  HEYGEN_API_KEY: process.env.HEYGEN_API_KEY?.trim() || undefined,
+  HEYGEN_API_URL: optionalUrl('HEYGEN_API_URL') ?? 'https://api.heygen.com',
+  HEYGEN_AVATAR_ID: process.env.HEYGEN_AVATAR_ID?.trim() || undefined,
+  HEYGEN_VOICE_ID: process.env.HEYGEN_VOICE_ID?.trim() || undefined,
+  HEYGEN_AVATAR_TYPE: (process.env.HEYGEN_AVATAR_TYPE?.trim() || 'photo_avatar').toLowerCase(),
   HEYGEN_AUTOMATION_WEBHOOK_URL: optionalUrl('HEYGEN_AUTOMATION_WEBHOOK_URL'),
+
   SUPPORTED_PLATFORMS: process.env.SUPPORTED_PLATFORMS?.trim() || 'facebook,instagram,tiktok,pinterest,youtube,x',
 };
 
