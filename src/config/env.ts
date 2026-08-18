@@ -63,6 +63,9 @@ export const env = {
 
   // Canva is the primary asset factory for stills, carousels, templates and video designs.
   CANVA_ACCESS_TOKEN: process.env.CANVA_ACCESS_TOKEN?.trim() || undefined,
+  CANVA_CLIENT_ID: process.env.CANVA_CLIENT_ID?.trim() || undefined,
+  CANVA_CLIENT_SECRET: process.env.CANVA_CLIENT_SECRET?.trim() || undefined,
+  CANVA_SCOPES: process.env.CANVA_SCOPES?.trim() || 'design:content:read design:content:write design:meta:read asset:read asset:write profile:read',
   CANVA_BRAND_KIT_ID: process.env.CANVA_BRAND_KIT_ID?.trim() || 'kAHON_7IACY',
   // Saved Ghaith Web master Canva designs. IDs are non-secret and can be overridden in Vercel if needed.
   CANVA_SOCIAL_DESIGN_ID: process.env.CANVA_SOCIAL_DESIGN_ID?.trim() || 'DAHSrPK5pN0',
