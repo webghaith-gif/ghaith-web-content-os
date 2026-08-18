@@ -52,7 +52,9 @@ export class GoogleDriveAdapter {
     });
     const prefix = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`;
     const suffix = `\r\n--${boundary}--`;
-    const body = new Blob([prefix, bytes, suffix]);
+    const binary = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(binary).set(bytes);
+    const body = new Blob([prefix, binary, suffix]);
 
     const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
       method: 'POST',
