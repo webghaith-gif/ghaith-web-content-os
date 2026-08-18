@@ -10,6 +10,7 @@ interface PoolClientLike extends Queryable { release(): void; }
 interface PoolLike extends Queryable {
   connect(): Promise<PoolClientLike>;
   end(): Promise<void>;
+  on?(event: 'error', listener: (error: Error) => void): void;
 }
 
 const CREATE_TABLE_SQL = `
@@ -34,10 +35,15 @@ export class PostgresDb implements DatabaseBackend {
     this.pool = pool ?? (new Pool({
       connectionString,
       ssl: ssl ? { rejectUnauthorized } : false,
-      max: 10,
-      idleTimeoutMillis: 30_000,
+      max: 1,
+      idleTimeoutMillis: 5_000,
       connectionTimeoutMillis: 10_000,
+      allowExitOnIdle: true,
     }) as unknown as PoolLike);
+
+    this.pool.on?.('error', (error) => {
+      console.error('PostgreSQL pool idle-client error:', error instanceof Error ? error.message : String(error));
+    });
   }
 
   private ensureInitialized(): Promise<void> {
