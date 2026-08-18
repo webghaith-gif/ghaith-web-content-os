@@ -1,6 +1,28 @@
 import { env } from '../config/env';
 
-export interface CanvaConnectionProbe { ok: boolean; enabled: boolean; mode: 'api' | 'webhook' | 'none'; message?: string; }
+export type CanvaAssetKind = 'social' | 'carousel' | 'video';
+
+export interface CanvaConnectionProbe {
+  ok: boolean;
+  enabled: boolean;
+  mode: 'api' | 'webhook' | 'none';
+  brandKitId?: string;
+  templates: { social: boolean; carousel: boolean; video: boolean };
+  message?: string;
+}
+
+export interface CanvaDesignResult {
+  kind: CanvaAssetKind;
+  designId: string;
+  title: string;
+  editUrl?: string;
+  viewUrl?: string;
+  exportFormat: 'png' | 'mp4';
+  exportUrls: string[];
+  templateId?: string;
+}
+
+interface CanvaJob<T = any> { id?: string; status?: 'in_progress' | 'success' | 'failed'; result?: T; error?: unknown; urls?: string[]; }
 
 export class CanvaAdapter {
   get mode(): CanvaConnectionProbe['mode'] {
@@ -12,20 +34,28 @@ export class CanvaAdapter {
   get enabled() { return this.mode !== 'none'; }
 
   async testConnection(): Promise<CanvaConnectionProbe> {
-    if (this.mode === 'none') return { ok: false, enabled: false, mode: 'none', message: 'Canva is not configured.' };
-    if (this.mode === 'webhook') return { ok: true, enabled: true, mode: 'webhook' };
+    const base = {
+      enabled: this.enabled,
+      mode: this.mode,
+      brandKitId: env.CANVA_BRAND_KIT_ID,
+      templates: {
+        social: Boolean(env.CANVA_SOCIAL_TEMPLATE_ID),
+        carousel: Boolean(env.CANVA_CAROUSEL_TEMPLATE_ID),
+        video: Boolean(env.CANVA_VIDEO_TEMPLATE_ID),
+      },
+    } as const;
+    if (this.mode === 'none') return { ok: false, ...base, message: 'Canva is not configured.' };
+    if (this.mode === 'webhook') return { ok: true, ...base };
     try {
-      const response = await fetch('https://api.canva.com/rest/v1/users/me', {
-        headers: { Authorization: `Bearer ${env.CANVA_ACCESS_TOKEN}` },
-      });
-      if (!response.ok) return { ok: false, enabled: true, mode: 'api', message: `Canva returned ${response.status}.` };
-      return { ok: true, enabled: true, mode: 'api' };
+      const response = await this.api('/users/me');
+      if (!response.ok) return { ok: false, ...base, message: `Canva returned ${response.status}.` };
+      return { ok: true, ...base };
     } catch (error) {
-      return { ok: false, enabled: true, mode: 'api', message: error instanceof Error ? error.message : String(error) };
+      return { ok: false, ...base, message: error instanceof Error ? error.message : String(error) };
     }
   }
 
-  async requestDesign(payload: Record<string, unknown>): Promise<unknown | undefined> {
+  async requestDesign(payload: Record<string, unknown>): Promise<CanvaDesignResult | unknown | undefined> {
     if (this.mode === 'none') return undefined;
     if (this.mode === 'webhook') {
       const response = await fetch(env.CANVA_AUTOMATION_WEBHOOK_URL!, {
@@ -35,25 +65,132 @@ export class CanvaAdapter {
       return response.json().catch(() => ({}));
     }
 
-    const platforms = Array.isArray(payload.platforms) ? payload.platforms.map(String) : [];
-    const size = platforms.includes('pinterest')
-      ? { width: 1000, height: 1500 }
-      : platforms.includes('instagram')
+    const kind = inferKind(payload);
+    const title = stringValue(payload.title) || 'Ghaith Web Content OS';
+    const templateId = this.templateFor(kind);
+    const design = templateId
+      ? await this.createFromTemplate(templateId, title, payload)
+      : await this.createFallbackDesign(kind, title);
+
+    const exportFormat = kind === 'video' ? 'mp4' : 'png';
+    const exportUrls = await this.exportDesign(design.id, exportFormat);
+    return {
+      kind,
+      designId: design.id,
+      title,
+      editUrl: design.urls?.edit_url,
+      viewUrl: design.urls?.view_url,
+      exportFormat,
+      exportUrls,
+      ...(templateId ? { templateId } : {}),
+    };
+  }
+
+  private templateFor(kind: CanvaAssetKind): string | undefined {
+    if (kind === 'video') return env.CANVA_VIDEO_TEMPLATE_ID;
+    if (kind === 'carousel') return env.CANVA_CAROUSEL_TEMPLATE_ID;
+    return env.CANVA_SOCIAL_TEMPLATE_ID;
+  }
+
+  private async createFromTemplate(templateId: string, title: string, payload: Record<string, unknown>): Promise<any> {
+    const data: Record<string, unknown> = {};
+    const body = stringValue(payload.caption) || stringValue(payload.body) || stringValue(payload.description);
+    const cta = stringValue(payload.cta);
+    if (title) data[env.CANVA_AUTOFILL_TITLE_FIELD] = { type: 'text', text: title };
+    if (body) data[env.CANVA_AUTOFILL_BODY_FIELD] = { type: 'text', text: body };
+    if (cta) data[env.CANVA_AUTOFILL_CTA_FIELD] = { type: 'text', text: cta };
+    const mediaAssetId = stringValue(payload.canvaMediaAssetId);
+    if (mediaAssetId) data[env.CANVA_AUTOFILL_MEDIA_FIELD] = { type: payload.mediaType === 'video' ? 'video' : 'image', asset_id: mediaAssetId };
+
+    if (Object.keys(data).length > 0) {
+      const response = await this.api('/autofills', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'create_from_brand_template', brand_template_id: templateId, title, data }),
+      });
+      if (response.ok) {
+        const initial = await response.json() as { job?: CanvaJob };
+        const job = await this.waitForJob(`/autofills/${initial.job?.id}`, initial.job);
+        const design = (job as any)?.result?.design ?? (job as any)?.design;
+        if (design?.id) return design;
+      }
+    }
+
+    const copyResponse = await this.api('/designs', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'brand_template', brand_template_id: templateId }),
+    });
+    if (!copyResponse.ok) throw new Error(`Canva brand-template copy failed: ${copyResponse.status} ${await copyResponse.text()}`);
+    const copied = await copyResponse.json() as { design?: any };
+    if (!copied.design?.id) throw new Error('Canva did not return a design ID.');
+    return copied.design;
+  }
+
+  private async createFallbackDesign(kind: CanvaAssetKind, title: string): Promise<any> {
+    const size = kind === 'video'
+      ? { width: 1080, height: 1920 }
+      : kind === 'carousel'
         ? { width: 1080, height: 1350 }
         : { width: 1080, height: 1080 };
-    const response = await fetch('https://api.canva.com/rest/v1/designs', {
+    const response = await this.api('/designs', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.CANVA_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        type: 'type_and_asset',
-        design_type: { type: 'custom', ...size },
-        title: typeof payload.title === 'string' ? payload.title : 'Ghaith Web Content OS',
-      }),
+      body: JSON.stringify({ type: 'type_and_asset', design_type: { type: 'custom', ...size }, title }),
     });
     if (!response.ok) throw new Error(`Canva design creation failed: ${response.status} ${await response.text()}`);
-    return response.json();
+    const data = await response.json() as { design?: any };
+    if (!data.design?.id) throw new Error('Canva did not return a design ID.');
+    return data.design;
+  }
+
+  private async exportDesign(designId: string, format: 'png' | 'mp4'): Promise<string[]> {
+    const exportFormat = format === 'mp4'
+      ? { type: 'mp4', quality: env.CANVA_VIDEO_EXPORT_QUALITY }
+      : { type: 'png' };
+    const response = await this.api('/exports', {
+      method: 'POST',
+      body: JSON.stringify({ design_id: designId, format: exportFormat }),
+    });
+    if (!response.ok) throw new Error(`Canva export failed: ${response.status} ${await response.text()}`);
+    const initial = await response.json() as { job?: CanvaJob };
+    const job = await this.waitForJob(`/exports/${initial.job?.id}`, initial.job);
+    const urls = (job as any)?.urls ?? (job as any)?.result?.urls ?? [];
+    return Array.isArray(urls) ? urls.filter((x): x is string => typeof x === 'string') : [];
+  }
+
+  private async waitForJob(path: string, initial?: CanvaJob): Promise<CanvaJob> {
+    if (!initial?.id) throw new Error('Canva asynchronous job did not return an ID.');
+    let job = initial;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (job.status === 'success') return job;
+      if (job.status === 'failed') throw new Error(`Canva job failed: ${JSON.stringify(job.error ?? {})}`);
+      await delay(Math.min(250 + attempt * 150, 1500));
+      const response = await this.api(path);
+      if (!response.ok) throw new Error(`Canva job polling failed: ${response.status} ${await response.text()}`);
+      const data = await response.json() as { job?: CanvaJob };
+      job = data.job ?? job;
+    }
+    throw new Error('Canva job timed out.');
+  }
+
+  private api(path: string, init: RequestInit = {}) {
+    if (!env.CANVA_ACCESS_TOKEN) throw new Error('CANVA_ACCESS_TOKEN is not configured.');
+    return fetch(`https://api.canva.com/rest/v1${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${env.CANVA_ACCESS_TOKEN}`,
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(init.headers ?? {}),
+      },
+    });
   }
 }
+
+function inferKind(payload: Record<string, unknown>): CanvaAssetKind {
+  const contentType = stringValue(payload.contentType).toLowerCase();
+  const platforms = Array.isArray(payload.platforms) ? payload.platforms.map((x) => String(x).toLowerCase()) : [];
+  if (contentType.includes('video') || contentType.includes('reel') || contentType.includes('short') || platforms.some((p) => ['tiktok', 'youtube'].includes(p))) return 'video';
+  if (contentType.includes('carousel')) return 'carousel';
+  return 'social';
+}
+
+function stringValue(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
+function delay(ms: number) { return new Promise((resolve) => setTimeout(resolve, ms)); }
