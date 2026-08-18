@@ -64,6 +64,10 @@ export const env = {
   // Canva is the primary asset factory for stills, carousels, templates and video designs.
   CANVA_ACCESS_TOKEN: process.env.CANVA_ACCESS_TOKEN?.trim() || undefined,
   CANVA_BRAND_KIT_ID: process.env.CANVA_BRAND_KIT_ID?.trim() || 'kAHON_7IACY',
+  // Prefer normal Canva designs with Autofill fields. Brand Templates remain a fallback.
+  CANVA_SOCIAL_DESIGN_ID: process.env.CANVA_SOCIAL_DESIGN_ID?.trim() || undefined,
+  CANVA_CAROUSEL_DESIGN_ID: process.env.CANVA_CAROUSEL_DESIGN_ID?.trim() || undefined,
+  CANVA_VIDEO_DESIGN_ID: process.env.CANVA_VIDEO_DESIGN_ID?.trim() || undefined,
   CANVA_SOCIAL_TEMPLATE_ID: process.env.CANVA_SOCIAL_TEMPLATE_ID?.trim() || undefined,
   CANVA_CAROUSEL_TEMPLATE_ID: process.env.CANVA_CAROUSEL_TEMPLATE_ID?.trim() || undefined,
   CANVA_VIDEO_TEMPLATE_ID: process.env.CANVA_VIDEO_TEMPLATE_ID?.trim() || undefined,

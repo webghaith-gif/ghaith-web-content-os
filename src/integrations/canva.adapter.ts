@@ -1,13 +1,14 @@
 import { env } from '../config/env';
 
 export type CanvaAssetKind = 'social' | 'carousel' | 'video';
+type CanvaSource = { type: 'design' | 'brand_template'; id: string };
 
 export interface CanvaConnectionProbe {
   ok: boolean;
   enabled: boolean;
   mode: 'api' | 'webhook' | 'none';
   brandKitId?: string;
-  templates: { social: boolean; carousel: boolean; video: boolean };
+  sources: { social: boolean; carousel: boolean; video: boolean };
   message?: string;
 }
 
@@ -19,10 +20,17 @@ export interface CanvaDesignResult {
   viewUrl?: string;
   exportFormat: 'png' | 'mp4';
   exportUrls: string[];
-  templateId?: string;
+  sourceType?: CanvaSource['type'];
+  sourceId?: string;
 }
 
-interface CanvaJob<T = any> { id?: string; status?: 'in_progress' | 'success' | 'failed'; result?: T; error?: unknown; urls?: string[]; }
+interface CanvaJob<T = any> {
+  id?: string;
+  status?: 'in_progress' | 'success' | 'failed';
+  result?: T;
+  error?: unknown;
+  urls?: string[];
+}
 
 export class CanvaAdapter {
   get mode(): CanvaConnectionProbe['mode'] {
@@ -38,10 +46,10 @@ export class CanvaAdapter {
       enabled: this.enabled,
       mode: this.mode,
       brandKitId: env.CANVA_BRAND_KIT_ID,
-      templates: {
-        social: Boolean(env.CANVA_SOCIAL_TEMPLATE_ID),
-        carousel: Boolean(env.CANVA_CAROUSEL_TEMPLATE_ID),
-        video: Boolean(env.CANVA_VIDEO_TEMPLATE_ID),
+      sources: {
+        social: Boolean(this.sourceFor('social')),
+        carousel: Boolean(this.sourceFor('carousel')),
+        video: Boolean(this.sourceFor('video')),
       },
     } as const;
     if (this.mode === 'none') return { ok: false, ...base, message: 'Canva is not configured.' };
@@ -59,17 +67,19 @@ export class CanvaAdapter {
     if (this.mode === 'none') return undefined;
     if (this.mode === 'webhook') {
       const response = await fetch(env.CANVA_AUTOMATION_WEBHOOK_URL!, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
       if (!response.ok) throw new Error(`Canva automation failed: ${response.status}`);
       return response.json().catch(() => ({}));
     }
 
-    const kind = inferKind(payload);
+    const kind = explicitOrInferredKind(payload);
     const title = stringValue(payload.title) || 'Ghaith Web Content OS';
-    const templateId = this.templateFor(kind);
-    const design = templateId
-      ? await this.createFromTemplate(templateId, title, payload)
+    const source = this.sourceFor(kind);
+    const design = source
+      ? await this.createFromSource(source, title, payload)
       : await this.createFallbackDesign(kind, title);
 
     const exportFormat = kind === 'video' ? 'mp4' : 'png';
@@ -82,30 +92,57 @@ export class CanvaAdapter {
       viewUrl: design.urls?.view_url,
       exportFormat,
       exportUrls,
-      ...(templateId ? { templateId } : {}),
+      ...(source ? { sourceType: source.type, sourceId: source.id } : {}),
     };
   }
 
-  private templateFor(kind: CanvaAssetKind): string | undefined {
-    if (kind === 'video') return env.CANVA_VIDEO_TEMPLATE_ID;
-    if (kind === 'carousel') return env.CANVA_CAROUSEL_TEMPLATE_ID;
-    return env.CANVA_SOCIAL_TEMPLATE_ID;
+  private sourceFor(kind: CanvaAssetKind): CanvaSource | undefined {
+    if (kind === 'social') {
+      if (env.CANVA_SOCIAL_DESIGN_ID) return { type: 'design', id: env.CANVA_SOCIAL_DESIGN_ID };
+      if (env.CANVA_SOCIAL_TEMPLATE_ID) return { type: 'brand_template', id: env.CANVA_SOCIAL_TEMPLATE_ID };
+    }
+    if (kind === 'carousel') {
+      if (env.CANVA_CAROUSEL_DESIGN_ID) return { type: 'design', id: env.CANVA_CAROUSEL_DESIGN_ID };
+      if (env.CANVA_CAROUSEL_TEMPLATE_ID) return { type: 'brand_template', id: env.CANVA_CAROUSEL_TEMPLATE_ID };
+    }
+    if (kind === 'video') {
+      if (env.CANVA_VIDEO_DESIGN_ID) return { type: 'design', id: env.CANVA_VIDEO_DESIGN_ID };
+      if (env.CANVA_VIDEO_TEMPLATE_ID) return { type: 'brand_template', id: env.CANVA_VIDEO_TEMPLATE_ID };
+    }
+    return undefined;
   }
 
-  private async createFromTemplate(templateId: string, title: string, payload: Record<string, unknown>): Promise<any> {
-    const data: Record<string, unknown> = {};
-    const body = stringValue(payload.caption) || stringValue(payload.body) || stringValue(payload.description);
-    const cta = stringValue(payload.cta);
-    if (title) data[env.CANVA_AUTOFILL_TITLE_FIELD] = { type: 'text', text: title };
-    if (body) data[env.CANVA_AUTOFILL_BODY_FIELD] = { type: 'text', text: body };
-    if (cta) data[env.CANVA_AUTOFILL_CTA_FIELD] = { type: 'text', text: cta };
-    const mediaAssetId = stringValue(payload.canvaMediaAssetId);
-    if (mediaAssetId) data[env.CANVA_AUTOFILL_MEDIA_FIELD] = { type: payload.mediaType === 'video' ? 'video' : 'image', asset_id: mediaAssetId };
+  private async createFromSource(source: CanvaSource, title: string, payload: Record<string, unknown>): Promise<any> {
+    const data = buildAutofillData(payload, title);
+    if (source.type === 'design') {
+      const supportedData = await this.filterByDesignDataset(source.id, data);
+      if (Object.keys(supportedData).length > 0) {
+        const response = await this.api('/autofills', {
+          method: 'POST',
+          body: JSON.stringify({ type: 'create_from_design', design_id: source.id, title, data: supportedData }),
+        });
+        if (!response.ok) throw new Error(`Canva design autofill failed: ${response.status} ${await response.text()}`);
+        const initial = await response.json() as { job?: CanvaJob };
+        const job = await this.waitForJob(`/autofills/${initial.job?.id}`, initial.job);
+        const design = (job as any)?.result?.design ?? (job as any)?.design;
+        if (!design?.id) throw new Error('Canva autofill did not return a design ID.');
+        return design;
+      }
+
+      const copyResponse = await this.api('/designs', {
+        method: 'POST',
+        body: JSON.stringify({ type: 'design', design_id: source.id }),
+      });
+      if (!copyResponse.ok) throw new Error(`Canva design copy failed: ${copyResponse.status} ${await copyResponse.text()}`);
+      const copied = await copyResponse.json() as { design?: any };
+      if (!copied.design?.id) throw new Error('Canva did not return a copied design ID.');
+      return copied.design;
+    }
 
     if (Object.keys(data).length > 0) {
       const response = await this.api('/autofills', {
         method: 'POST',
-        body: JSON.stringify({ type: 'create_from_brand_template', brand_template_id: templateId, title, data }),
+        body: JSON.stringify({ type: 'create_from_brand_template', brand_template_id: source.id, title, data }),
       });
       if (response.ok) {
         const initial = await response.json() as { job?: CanvaJob };
@@ -117,12 +154,20 @@ export class CanvaAdapter {
 
     const copyResponse = await this.api('/designs', {
       method: 'POST',
-      body: JSON.stringify({ type: 'brand_template', brand_template_id: templateId }),
+      body: JSON.stringify({ type: 'brand_template', brand_template_id: source.id }),
     });
     if (!copyResponse.ok) throw new Error(`Canva brand-template copy failed: ${copyResponse.status} ${await copyResponse.text()}`);
     const copied = await copyResponse.json() as { design?: any };
     if (!copied.design?.id) throw new Error('Canva did not return a design ID.');
     return copied.design;
+  }
+
+  private async filterByDesignDataset(designId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const response = await this.api(`/designs/${designId}/dataset`);
+    if (!response.ok) throw new Error(`Canva design dataset check failed: ${response.status} ${await response.text()}`);
+    const body = await response.json() as { dataset?: Record<string, unknown> };
+    const allowed = new Set(Object.keys(body.dataset ?? {}));
+    return Object.fromEntries(Object.entries(data).filter(([key]) => allowed.has(key)));
   }
 
   private async createFallbackDesign(kind: CanvaAssetKind, title: string): Promise<any> {
@@ -184,12 +229,56 @@ export class CanvaAdapter {
   }
 }
 
-function inferKind(payload: Record<string, unknown>): CanvaAssetKind {
+function buildAutofillData(payload: Record<string, unknown>, fallbackTitle: string): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  const title = stringValue(payload.hook) || fallbackTitle;
+  const body = stringValue(payload.caption) || stringValue(payload.body) || stringValue(payload.description);
+  const cta = stringValue(payload.cta);
+  if (title) data[env.CANVA_AUTOFILL_TITLE_FIELD] = { type: 'text', text: title };
+  if (body) data[env.CANVA_AUTOFILL_BODY_FIELD] = { type: 'text', text: body };
+  if (cta) data[env.CANVA_AUTOFILL_CTA_FIELD] = { type: 'text', text: cta };
+
+  const slides = Array.isArray(payload.carouselSlides) ? payload.carouselSlides as Array<Record<string, unknown>> : [];
+  addText(data, 'SLIDE2_TITLE', slides[1]?.title);
+  addText(data, 'SLIDE2_BODY', slides[1]?.body);
+  addText(data, 'SLIDE2_POINT1', firstPoint(slides[1], 0));
+  addText(data, 'SLIDE2_POINT2', firstPoint(slides[1], 1));
+  addText(data, 'SLIDE3_TITLE', slides[2]?.title);
+  addText(data, 'SLIDE3_STEP1', firstPoint(slides[2], 0));
+  addText(data, 'SLIDE3_STEP2', firstPoint(slides[2], 1));
+  addText(data, 'SLIDE3_STEP3', firstPoint(slides[2], 2));
+  addText(data, 'SLIDE4_TITLE', slides[3]?.title);
+  addText(data, 'SLIDE4_BODY', slides[3]?.body);
+  addText(data, 'SLIDE5_BODY', slides[4]?.body);
+
+  const scenes = Array.isArray(payload.videoScenes) ? payload.videoScenes as Array<Record<string, unknown>> : [];
+  addText(data, 'SCENE2_TITLE', scenes[1]?.title);
+  addText(data, 'SCENE2_BODY', scenes[1]?.body);
+  addText(data, 'SCENE3_BODY', scenes[2]?.body);
+
+  const mediaAssetId = stringValue(payload.canvaMediaAssetId);
+  if (mediaAssetId) data[env.CANVA_AUTOFILL_MEDIA_FIELD] = { type: payload.mediaType === 'video' ? 'video' : 'image', asset_id: mediaAssetId };
+  return data;
+}
+
+function explicitOrInferredKind(payload: Record<string, unknown>): CanvaAssetKind {
+  const explicit = stringValue(payload.assetKind).toLowerCase();
+  if (explicit === 'social' || explicit === 'carousel' || explicit === 'video') return explicit;
   const contentType = stringValue(payload.contentType).toLowerCase();
   const platforms = Array.isArray(payload.platforms) ? payload.platforms.map((x) => String(x).toLowerCase()) : [];
   if (contentType.includes('video') || contentType.includes('reel') || contentType.includes('short') || platforms.some((p) => ['tiktok', 'youtube'].includes(p))) return 'video';
   if (contentType.includes('carousel')) return 'carousel';
   return 'social';
+}
+
+function addText(data: Record<string, unknown>, key: string, value: unknown) {
+  const text = stringValue(value);
+  if (text) data[key] = { type: 'text', text };
+}
+
+function firstPoint(slide: Record<string, unknown> | undefined, index: number): unknown {
+  const points = Array.isArray(slide?.points) ? slide!.points as unknown[] : [];
+  return points[index];
 }
 
 function stringValue(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
