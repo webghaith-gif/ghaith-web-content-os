@@ -62,9 +62,9 @@ export function createApp() {
           platforms: platforms.list(),
           clickupListId: env.CLICKUP_LIST_ID ?? null,
           integrations: {
-            ChatGPT: integrations.openai.enabledFor(oidcToken),
+            'Gemini Automation': integrations.openai.enabledFor(oidcToken),
             ClickUp: integrations.clickup.enabled,
-            Make: env.PUBLISH_MODE === 'clickup_watch' ? integrations.clickup.enabled : integrations.make.enabled,
+            Make: integrations.make.enabled,
             'Google Drive': integrations.googleDrive.enabled,
             Semrush: integrations.semrush.enabled,
             Canva: integrations.canva.enabled,
