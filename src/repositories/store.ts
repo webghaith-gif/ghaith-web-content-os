@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { ContentItem, Opportunity, PublicationLog, Report } from '../core/types';
 import { NotFoundError } from '../core/errors';
-import type { CanvaOAuthPendingState, CanvaOAuthTokenState, DatabaseBackend } from './database';
+import type {
+  CanvaOAuthPendingState,
+  CanvaOAuthTokenState,
+  DatabaseBackend,
+  GoogleDriveOAuthPendingState,
+  GoogleDriveOAuthTokenState,
+} from './database';
 
 export class Store {
   constructor(private readonly db: DatabaseBackend) {}
@@ -77,6 +83,34 @@ export class Store {
     await this.db.mutate((db) => {
       db.integrations.canva ??= {};
       db.integrations.canva.pending = pending;
+    });
+  }
+
+  async getGoogleDriveOAuthToken(): Promise<GoogleDriveOAuthTokenState | undefined> {
+    return (await this.db.read()).integrations.googleDrive?.token;
+  }
+  async setGoogleDriveOAuthToken(token: GoogleDriveOAuthTokenState | undefined): Promise<void> {
+    await this.db.mutate((db) => {
+      db.integrations.googleDrive ??= {};
+      db.integrations.googleDrive.token = token;
+    });
+  }
+  async getGoogleDriveOAuthPending(): Promise<GoogleDriveOAuthPendingState | undefined> {
+    return (await this.db.read()).integrations.googleDrive?.pending;
+  }
+  async setGoogleDriveOAuthPending(pending: GoogleDriveOAuthPendingState | undefined): Promise<void> {
+    await this.db.mutate((db) => {
+      db.integrations.googleDrive ??= {};
+      db.integrations.googleDrive.pending = pending;
+    });
+  }
+  async getGoogleDriveFolderId(): Promise<string | undefined> {
+    return (await this.db.read()).integrations.googleDrive?.folderId;
+  }
+  async setGoogleDriveFolderId(folderId: string | undefined): Promise<void> {
+    await this.db.mutate((db) => {
+      db.integrations.googleDrive ??= {};
+      db.integrations.googleDrive.folderId = folderId;
     });
   }
 }
