@@ -5,7 +5,15 @@ interface OpenAIResponse {
   output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
 }
 
-export type OpenAIAuthMode = 'openai_api' | 'vercel_ai_gateway' | 'none';
+interface GeminiResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ text?: string }>;
+    };
+  }>;
+}
+
+export type OpenAIAuthMode = 'gemini_api' | 'openai_api' | 'vercel_ai_gateway' | 'none';
 export interface OpenAIConnectionProbe {
   ok: boolean;
   enabled: boolean;
@@ -14,8 +22,12 @@ export interface OpenAIConnectionProbe {
   message?: string;
 }
 
+// Legacy class name retained to avoid a broad refactor. It now routes AI requests
+// free-first: Gemini Free Tier -> explicitly enabled paid provider -> local fallback.
 export class OpenAIAdapter {
   modeFor(oidcToken?: string): OpenAIAuthMode {
+    if (env.GEMINI_API_KEY) return 'gemini_api';
+    if (!env.ALLOW_PAID_AI) return 'none';
     if (env.OPENAI_API_KEY) return 'openai_api';
     if (env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN || oidcToken) return 'vercel_ai_gateway';
     return 'none';
@@ -24,20 +36,41 @@ export class OpenAIAdapter {
   enabledFor(oidcToken?: string) { return this.modeFor(oidcToken) !== 'none'; }
   get enabled() { return this.enabledFor(); }
   get mode() { return this.modeFor(); }
+
   modelFor(oidcToken?: string) {
-    return this.modeFor(oidcToken) === 'vercel_ai_gateway' ? env.AI_GATEWAY_MODEL : env.OPENAI_MODEL;
+    const mode = this.modeFor(oidcToken);
+    if (mode === 'gemini_api') return env.GEMINI_MODEL;
+    if (mode === 'vercel_ai_gateway') return env.AI_GATEWAY_MODEL;
+    return env.OPENAI_MODEL;
   }
+
   get model() { return this.modelFor(); }
 
   async testConnection(oidcToken?: string): Promise<OpenAIConnectionProbe> {
     const mode = this.modeFor(oidcToken);
     const model = this.modelFor(oidcToken);
     const base = { enabled: mode !== 'none', model, mode } as const;
+
     if (mode === 'none') {
-      return { ok: false, ...base, message: 'No OpenAI API key or Vercel AI Gateway OIDC token is available.' };
+      return {
+        ok: false,
+        ...base,
+        message: env.ALLOW_PAID_AI
+          ? 'No AI provider is configured.'
+          : 'Free AI is not configured. Add GEMINI_API_KEY. Paid AI remains locked unless ALLOW_PAID_AI=true.',
+      };
     }
 
     try {
+      if (mode === 'gemini_api') {
+        const response = await this.requestGemini('Reply with OK.', 'Reply with OK.');
+        if (!response.ok) {
+          const detail = sanitizeProviderError(await response.text());
+          return { ok: false, ...base, message: `Gemini returned ${response.status}${detail ? `: ${detail}` : '.'}` };
+        }
+        return { ok: true, ...base };
+      }
+
       if (mode === 'openai_api') {
         const response = await fetch('https://api.openai.com/v1/models', {
           headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` },
@@ -64,14 +97,27 @@ export class OpenAIAdapter {
 
   async generateText(instructions: string, input: string, oidcToken?: string): Promise<string> {
     const mode = this.modeFor(oidcToken);
-    if (mode === 'none') throw new Error('GPT is not configured: no OpenAI key or Vercel AI Gateway OIDC token is available.');
+    if (mode === 'none') {
+      throw new Error('AI is not configured. Free mode requires GEMINI_API_KEY; paid providers are locked by default.');
+    }
+
+    if (mode === 'gemini_api') {
+      const response = await this.requestGemini(instructions, input);
+      if (!response.ok) {
+        throw new Error(`Gemini request failed: ${response.status} ${sanitizeProviderError(await response.text())}`);
+      }
+      const data = await response.json() as GeminiResponse;
+      const parts = data.candidates?.[0]?.content?.parts ?? [];
+      return parts.map((part) => part.text ?? '').join('').trim();
+    }
+
     const response = await this.requestResponses({
       model: this.modelFor(oidcToken),
       instructions,
       input,
       store: false,
     }, oidcToken);
-    if (!response.ok) throw new Error(`GPT request failed: ${response.status} ${sanitizeProviderError(await response.text())}`);
+    if (!response.ok) throw new Error(`AI request failed: ${response.status} ${sanitizeProviderError(await response.text())}`);
     const data = await response.json() as OpenAIResponse;
     if (data.output_text) return data.output_text;
     for (const item of data.output ?? []) {
@@ -80,13 +126,31 @@ export class OpenAIAdapter {
     return '';
   }
 
+  private requestGemini(instructions: string, input: string) {
+    const key = env.GEMINI_API_KEY;
+    if (!key) throw new Error('Gemini API key is unavailable.');
+    const model = encodeURIComponent(env.GEMINI_MODEL);
+    return fetch(`${env.GEMINI_API_BASE_URL}/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: {
+        'x-goog-api-key': key,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: instructions }] },
+        contents: [{ role: 'user', parts: [{ text: input }] }],
+      }),
+    });
+  }
+
   private requestResponses(body: Record<string, unknown>, oidcToken?: string) {
+    if (!env.ALLOW_PAID_AI) throw new Error('Paid AI providers are disabled.');
     const mode = this.modeFor(oidcToken);
     const gateway = mode === 'vercel_ai_gateway';
     const token = gateway
       ? env.AI_GATEWAY_API_KEY ?? env.VERCEL_OIDC_TOKEN ?? oidcToken
       : env.OPENAI_API_KEY;
-    if (!token) throw new Error('GPT authentication token is unavailable.');
+    if (!token) throw new Error('AI authentication token is unavailable.');
     const baseUrl = gateway ? env.AI_GATEWAY_BASE_URL : 'https://api.openai.com/v1';
     return fetch(`${baseUrl}/responses`, {
       method: 'POST',
