@@ -64,3 +64,5 @@ jobs:
           test "$drive_urls" -ge 4
 
           echo 'SAFE_E2E_TEST_PASSED'
+
+# rerun after Canva dataset type fix
