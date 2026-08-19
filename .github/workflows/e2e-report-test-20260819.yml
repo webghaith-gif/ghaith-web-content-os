@@ -1,0 +1,66 @@
+name: E2E Report Test 2026-08-19
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/e2e-report-test-20260819.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-report-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run safe production E2E test (no publish)
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://ghaith-web-content-os.vercel.app'
+
+          report_payload=$(jq -n \
+            --arg title 'تقرير اليوم 19 أوت 2026 — الذكاء الاصطناعي في التعليم: من البرومبت إلى Workflow' \
+            --arg body 'تشير أحدث التحديثات الرسمية إلى انتقال أدوات الذكاء الاصطناعي التعليمية من مجرد الإجابة عن الأسئلة إلى تنفيذ مهام متعددة الخطوات. أعلنت OpenAI في 4 أوت 2026 عن إضافات تعليمية موجهة للمعلمين والطلبة داخل ChatGPT Work وCodex، هدفها استخدام مواد المقرر والسياق الحقيقي لبناء تدفقات عمل جاهزة بدل الاعتماد على برومبتات منفردة. كما وسعت Google خلال 2026 تجارب Gemini وGoogle Classroom لتشمل التعلم الموجّه ودفاتر الدراسة وأنشطة يقودها المعلم، مع تركيز واضح على إبقاء المعلم في مركز القرار. الفرصة لغيث ويب: تحويل هذا الاتجاه إلى محتوى ومنتج عملي للمعلمين بعنوان «Workflow كامل للمعلم بالذكاء الاصطناعي» يركز على التخطيط، إعداد الوسائل، التقييم، والمتابعة، بدل بيع قوائم برومبتات عامة فقط.' \
+            --arg source 'OpenAI official education update 2026-08-04; Google for Education official updates 2026-06-25' \
+            '{title:$title,body:$body,source:$source}')
+
+          echo '1) Creating report...'
+          report=$(curl -fsS --max-time 60 -X POST "$base/api/reports" \
+            -H 'Content-Type: application/json' \
+            -d "$report_payload")
+          echo "$report" | jq .
+          report_id=$(echo "$report" | jq -r '.id')
+          test -n "$report_id" -a "$report_id" != 'null'
+
+          echo '2) Extracting opportunities...'
+          opportunities=$(curl -fsS --max-time 180 -X POST "$base/api/reports/$report_id/opportunities")
+          echo "$opportunities" | jq .
+          opportunity_id=$(echo "$opportunities" | jq -r 'if type=="array" then .[0].id else (.opportunities[0].id // .id) end')
+          test -n "$opportunity_id" -a "$opportunity_id" != 'null'
+
+          echo '3) Generating multi-platform content...'
+          content=$(curl -fsS --max-time 180 -X POST "$base/api/opportunities/$opportunity_id/content" \
+            -H 'Content-Type: application/json' \
+            -d '{"platforms":["facebook","instagram","pinterest","tiktok","youtube"]}')
+          echo "$content" | jq .
+          content_id=$(echo "$content" | jq -r '.id')
+          test -n "$content_id" -a "$content_id" != 'null'
+          test "$(echo "$content" | jq -r '.status')" = 'IN_REVIEW'
+
+          echo '4) Requesting Canva assets and Drive uploads...'
+          assets=$(curl -fsS --max-time 300 -X POST "$base/api/content/$content_id/assets")
+          echo "$assets" | jq .
+
+          canva_count=$(echo "$assets" | jq '[.assets[]? | select(.provider=="canva")] | length')
+          drive_count=$(echo "$assets" | jq '[.assets[]? | select(.provider=="google-drive")] | length')
+          drive_urls=$(echo "$assets" | jq '.googleDriveUrls | length')
+          status=$(echo "$assets" | jq -r '.status')
+
+          echo "RESULT report_id=$report_id opportunity_id=$opportunity_id content_id=$content_id status=$status canva_assets=$canva_count drive_assets=$drive_count drive_urls=$drive_urls"
+
+          test "$status" = 'IN_REVIEW'
+          test "$canva_count" -ge 1
+          test "$drive_urls" -ge 1
+
+          echo 'SAFE_E2E_TEST_PASSED'
