@@ -15,11 +15,11 @@ export class AssetService {
     heygen?: HeyGenAdapter,
     drive?: GoogleDriveAdapter,
   ) {
-    // Important: Canva must share the same Store so OAuth tokens persisted in Neon
-    // are available to the asset factory and can be refreshed automatically.
+    // Important: OAuth-backed integrations must share the same Store so tokens persisted
+    // in Neon are available to the asset factory and can be refreshed automatically.
     this.canva = canva ?? new CanvaAdapter(store);
     this.heygen = heygen ?? new HeyGenAdapter();
-    this.drive = drive ?? new GoogleDriveAdapter();
+    this.drive = drive ?? new GoogleDriveAdapter(store);
   }
 
   async requestAssets(contentId: string) {
