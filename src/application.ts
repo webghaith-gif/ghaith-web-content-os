@@ -103,12 +103,16 @@ export function createApp() {
       if (url.pathname === '/api/integrations/canva/connect' && method === 'GET') {
         const redirectUri = `${requestOrigin(req)}/api/integrations/canva/callback`;
         const authorizationUrl = await integrations.canva.createAuthorizationUrl(redirectUri);
-        return sendJson(res, 200, { authorizationUrl, redirectUri });
+        res.writeHead(302, { Location: authorizationUrl, 'Cache-Control': 'no-store' });
+        return res.end();
       }
       if (url.pathname === '/api/integrations/canva/callback' && method === 'GET') {
         const code = url.searchParams.get('code');
         const state = url.searchParams.get('state');
-        if (!code || !state) throw new AppError('Canva callback requires code and state.', 400, 'VALIDATION_ERROR');
+        if (!code || !state) {
+          res.writeHead(302, { Location: '/api/integrations/canva/connect', 'Cache-Control': 'no-store' });
+          return res.end();
+        }
         await integrations.canva.handleOAuthCallback(code, state);
         res.writeHead(302, { Location: '/?canva=connected', 'Cache-Control': 'no-store' });
         return res.end();
