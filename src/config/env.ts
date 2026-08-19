@@ -27,8 +27,6 @@ function optionalUrl(name: string): string | undefined {
     new URL(value);
     return value;
   } catch {
-    // Optional integration URLs must never crash the whole application at module load.
-    // Do not log the value itself because a secret may have been pasted into the wrong field.
     console.warn(`Ignoring invalid optional URL in ${name}.`);
     return undefined;
   }
@@ -47,7 +45,7 @@ export const env = {
 
   // Free-first AI mode. Gemini Free Tier is preferred whenever a key is configured.
   GEMINI_API_KEY: process.env.GEMINI_API_KEY?.trim() || undefined,
-  GEMINI_MODEL: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash-lite',
+  GEMINI_MODEL: process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash-lite',
   GEMINI_API_BASE_URL: optionalUrl('GEMINI_API_BASE_URL') ?? 'https://generativelanguage.googleapis.com/v1beta',
   // Safety lock: paid providers are disabled unless the owner explicitly opts in.
   ALLOW_PAID_AI: booleanEnv('ALLOW_PAID_AI', false),
@@ -81,13 +79,11 @@ export const env = {
   SEMRUSH_API_KEY: process.env.SEMRUSH_API_KEY?.trim() || undefined,
   SEMRUSH_COUNTRY: (process.env.SEMRUSH_COUNTRY?.trim() || 'TN').toUpperCase(),
 
-  // Canva is the primary asset factory for stills, carousels, templates and video designs.
   CANVA_ACCESS_TOKEN: process.env.CANVA_ACCESS_TOKEN?.trim() || undefined,
   CANVA_CLIENT_ID: process.env.CANVA_CLIENT_ID?.trim() || undefined,
   CANVA_CLIENT_SECRET: process.env.CANVA_CLIENT_SECRET?.trim() || undefined,
   CANVA_SCOPES: process.env.CANVA_SCOPES?.trim() || 'design:content:read design:content:write design:meta:read asset:read asset:write profile:read',
   CANVA_BRAND_KIT_ID: process.env.CANVA_BRAND_KIT_ID?.trim() || 'kAHON_7IACY',
-  // Saved Ghaith Web master Canva designs. IDs are non-secret and can be overridden in Vercel if needed.
   CANVA_SOCIAL_DESIGN_ID: process.env.CANVA_SOCIAL_DESIGN_ID?.trim() || 'DAHSrPK5pN0',
   CANVA_CAROUSEL_DESIGN_ID: process.env.CANVA_CAROUSEL_DESIGN_ID?.trim() || 'DAHSrGq1HWk',
   CANVA_VIDEO_DESIGN_ID: process.env.CANVA_VIDEO_DESIGN_ID?.trim() || 'DAHSrIr1gMw',
@@ -101,7 +97,6 @@ export const env = {
   CANVA_AUTOFILL_MEDIA_FIELD: process.env.CANVA_AUTOFILL_MEDIA_FIELD?.trim() || 'MEDIA',
   CANVA_AUTOMATION_WEBHOOK_URL: optionalUrl('CANVA_AUTOMATION_WEBHOOK_URL'),
 
-  // HeyGen is optional: avatar/voice raw video source that can be fed into Canva.
   HEYGEN_API_KEY: process.env.HEYGEN_API_KEY?.trim() || undefined,
   HEYGEN_API_URL: optionalUrl('HEYGEN_API_URL') ?? 'https://api.heygen.com',
   HEYGEN_AVATAR_ID: process.env.HEYGEN_AVATAR_ID?.trim() || undefined,
