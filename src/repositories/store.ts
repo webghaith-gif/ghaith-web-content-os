@@ -17,8 +17,22 @@ export class Store {
   async healthCheck(): Promise<void> { await this.db.read(); }
 
   async createReport(input: Omit<Report, 'id' | 'createdAt'>): Promise<Report> {
+    const titleKey = normalizeForDedup(input.title);
+    const bodyKey = normalizeForDedup(input.body);
+    const existing = (await this.db.read()).reports.find((item) =>
+      normalizeForDedup(item.title) === titleKey && normalizeForDedup(item.body) === bodyKey
+    );
+    if (existing) return existing;
+
     const report: Report = { ...input, id: randomUUID(), createdAt: new Date().toISOString() };
-    return this.db.mutate((db) => { db.reports.push(report); return report; });
+    return this.db.mutate((db) => {
+      const duplicate = db.reports.find((item) =>
+        normalizeForDedup(item.title) === titleKey && normalizeForDedup(item.body) === bodyKey
+      );
+      if (duplicate) return duplicate;
+      db.reports.push(report);
+      return report;
+    });
   }
   async listReports() { return (await this.db.read()).reports; }
   async getReport(id: string) {
@@ -28,8 +42,26 @@ export class Store {
   }
 
   async saveOpportunity(input: Omit<Opportunity, 'id' | 'createdAt'>): Promise<Opportunity> {
+    const titleKey = normalizeForDedup(input.title);
+    const rationaleKey = normalizeForDedup(input.rationale);
+    const existing = (await this.db.read()).opportunities.find((item) =>
+      item.reportId === input.reportId
+      && normalizeForDedup(item.title) === titleKey
+      && normalizeForDedup(item.rationale) === rationaleKey
+    );
+    if (existing) return existing;
+
     const opportunity: Opportunity = { ...input, id: randomUUID(), createdAt: new Date().toISOString() };
-    return this.db.mutate((db) => { db.opportunities.push(opportunity); return opportunity; });
+    return this.db.mutate((db) => {
+      const duplicate = db.opportunities.find((item) =>
+        item.reportId === input.reportId
+        && normalizeForDedup(item.title) === titleKey
+        && normalizeForDedup(item.rationale) === rationaleKey
+      );
+      if (duplicate) return duplicate;
+      db.opportunities.push(opportunity);
+      return opportunity;
+    });
   }
   async listOpportunities() { return (await this.db.read()).opportunities.sort((a, b) => b.score.total - a.score.total); }
   async getOpportunity(id: string) {
@@ -39,9 +71,26 @@ export class Store {
   }
 
   async createContent(input: Omit<ContentItem, 'id' | 'createdAt' | 'updatedAt' | 'revision'>): Promise<ContentItem> {
+    const platformKey = normalizedPlatformKey(input.platforms);
+    const existing = (await this.db.read()).contents.find((item) =>
+      item.opportunityId === input.opportunityId
+      && normalizedPlatformKey(item.platforms) === platformKey
+      && item.status !== 'ARCHIVED'
+    );
+    if (existing) return existing;
+
     const now = new Date().toISOString();
     const item: ContentItem = { ...input, id: randomUUID(), createdAt: now, updatedAt: now, revision: 1 };
-    return this.db.mutate((db) => { db.contents.push(item); return item; });
+    return this.db.mutate((db) => {
+      const duplicate = db.contents.find((current) =>
+        current.opportunityId === input.opportunityId
+        && normalizedPlatformKey(current.platforms) === platformKey
+        && current.status !== 'ARCHIVED'
+      );
+      if (duplicate) return duplicate;
+      db.contents.push(item);
+      return item;
+    });
   }
   async listContents() { return (await this.db.read()).contents; }
   async getContent(id: string) {
@@ -165,4 +214,17 @@ export class Store {
       state.subscriptions = state.subscriptions.filter((item) => item.endpoint !== endpoint);
     });
   }
+}
+
+function normalizeForDedup(value: string): string {
+  return value
+    .normalize('NFKC')
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function normalizedPlatformKey(platforms: string[]): string {
+  return [...new Set(platforms.map((item) => item.trim().toLowerCase()).filter(Boolean))].sort().join(',');
 }
