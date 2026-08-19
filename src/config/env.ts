@@ -23,8 +23,15 @@ function storageDriver(): 'json' | 'postgres' {
 function optionalUrl(name: string): string | undefined {
   const value = process.env[name]?.trim();
   if (!value) return undefined;
-  new URL(value);
-  return value;
+  try {
+    new URL(value);
+    return value;
+  } catch {
+    // Optional integration URLs must never crash the whole application at module load.
+    // Do not log the value itself because a secret may have been pasted into the wrong field.
+    console.warn(`Ignoring invalid optional URL in ${name}.`);
+    return undefined;
+  }
 }
 
 export const env = {
