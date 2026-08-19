@@ -73,7 +73,8 @@ export const env = {
   GOOGLE_DRIVE_CLIENT_ID: process.env.GOOGLE_DRIVE_CLIENT_ID?.trim() || undefined,
   GOOGLE_DRIVE_CLIENT_SECRET: process.env.GOOGLE_DRIVE_CLIENT_SECRET?.trim() || undefined,
   GOOGLE_DRIVE_REFRESH_TOKEN: process.env.GOOGLE_DRIVE_REFRESH_TOKEN?.trim() || undefined,
-  GOOGLE_DRIVE_FOLDER_ID: process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || undefined,
+  // Non-secret canonical Ghaith Web reference folder. Override only if the archive location changes.
+  GOOGLE_DRIVE_FOLDER_ID: process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || '1mwDLk-Lxv10vMWD7QOO-m2_Beqk0MU2G',
 
   SEMRUSH_API_URL: optionalUrl('SEMRUSH_API_URL') ?? 'https://api.semrush.com/apis/v4/keywords/v1/metrics',
   SEMRUSH_API_KEY: process.env.SEMRUSH_API_KEY?.trim() || undefined,
