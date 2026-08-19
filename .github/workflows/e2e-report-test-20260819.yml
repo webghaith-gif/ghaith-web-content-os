@@ -60,7 +60,7 @@ jobs:
           echo "RESULT report_id=$report_id opportunity_id=$opportunity_id content_id=$content_id status=$status canva_assets=$canva_count drive_assets=$drive_count drive_urls=$drive_urls"
 
           test "$status" = 'IN_REVIEW'
-          test "$canva_count" -ge 1
-          test "$drive_urls" -ge 1
+          test "$canva_count" -ge 3
+          test "$drive_urls" -ge 4
 
           echo 'SAFE_E2E_TEST_PASSED'
