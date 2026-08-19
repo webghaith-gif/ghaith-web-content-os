@@ -27,6 +27,31 @@ export interface GoogleDriveOAuthPendingState {
   expiresAt: number;
 }
 
+export interface GoogleDriveWatchState {
+  channelId: string;
+  resourceId?: string;
+  channelToken: string;
+  expiration: number;
+  pageToken: string;
+  knownFileIds: string[];
+  startedAt: string;
+  webhookUrl: string;
+}
+
+export interface PushSubscriptionState {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys: { p256dh: string; auth: string };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PushNotificationState {
+  vapidPublicKey?: string;
+  vapidPrivateKey?: string;
+  subscriptions?: PushSubscriptionState[];
+}
+
 export interface IntegrationState {
   canva?: {
     token?: CanvaOAuthTokenState;
@@ -36,7 +61,9 @@ export interface IntegrationState {
     token?: GoogleDriveOAuthTokenState;
     pending?: GoogleDriveOAuthPendingState;
     folderId?: string;
+    watch?: GoogleDriveWatchState;
   };
+  notifications?: PushNotificationState;
 }
 
 export interface DatabaseShape {
