@@ -7,10 +7,10 @@ export class ContentGenerationService {
     private readonly ai = new OpenAIAdapter(),
   ) {}
 
-  async createFromOpportunity(opportunityId: string, platforms: string[]) {
+  async createFromOpportunity(opportunityId: string, platforms: string[], oidcToken?: string) {
     const opportunity = await this.store.getOpportunity(opportunityId);
-    const generated = this.ai.enabled
-      ? await this.generateWithAi(opportunity.title, opportunity.rationale, platforms)
+    const generated = this.ai.enabledFor(oidcToken)
+      ? await this.generateWithAi(opportunity.title, opportunity.rationale, platforms, oidcToken)
       : fallbackPackage(opportunity.title);
 
     return this.store.createContent({
@@ -29,7 +29,7 @@ export class ContentGenerationService {
     });
   }
 
-  private async generateWithAi(title: string, rationale: string, platforms: string[]) {
+  private async generateWithAi(title: string, rationale: string, platforms: string[], oidcToken?: string) {
     const text = await this.ai.generateText(
       [
         'Create a concise multi-platform content package for Ghaith Web.',
@@ -39,6 +39,7 @@ export class ContentGenerationService {
         'Keep Arabic copy clear and platform-ready. Do not include markdown fences.',
       ].join(' '),
       `Opportunity: ${title}\nRationale: ${rationale}\nPlatforms: ${platforms.join(', ')}`,
+      oidcToken,
     );
     try {
       const parsed = JSON.parse(text);
