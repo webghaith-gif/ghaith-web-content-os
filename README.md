@@ -12,10 +12,11 @@ A runnable TypeScript/Node.js orchestration layer that mirrors the existing Ghai
 - Make webhook adapter with retry/backoff.
 - Generic platform registry: Facebook, Instagram, TikTok, Pinterest, YouTube, X, or any future platform.
 - Idempotency/duplicate prevention per content + platform + revision.
-- Google Drive direct text-manifest upload adapter.
-- Optional OpenAI intelligence/content generation.
+- Google Drive direct upload adapter with access-token or OAuth refresh-token authentication.
+- Free-first automated AI routing: Gemini is preferred; paid OpenAI/Vercel AI Gateway paths are disabled by default.
 - Optional Semrush enrichment bridge.
-- Optional Canva and HeyGen automation bridges.
+- Canva OAuth integration plus optional automation webhook bridge.
+- Optional HeyGen direct API or automation webhook bridge.
 - PostgreSQL persistence for production, with transactional mutation locking.
 - JSON persistence retained as a zero-setup local/development fallback.
 - REST API + full responsive Arabic RTL web app / installable PWA.
@@ -43,7 +44,9 @@ Open `http://localhost:3000`.
 
 For zero-setup local storage, set `STORAGE_DRIVER=json`. For production, set `DATABASE_URL` and use PostgreSQL.
 
-Without external credentials the app still starts. The default publishing mode is **`clickup_watch`**, which mirrors the current Ghaith Web workflow: human approval → ClickUp READY → the existing Make Watch Tasks scenario. Set `PUBLISH_MODE=webhook` only if you intentionally want the app to call a Make custom webhook directly.
+Without external credentials the app still starts and falls back gracefully where optional integrations are unavailable. The default publishing mode is **`clickup_watch`**, which mirrors the current Ghaith Web workflow: human approval → ClickUp READY → the existing Make Watch Tasks scenario. Set `PUBLISH_MODE=webhook` only if you intentionally want the app to call a Make custom webhook directly.
+
+For automated AI, configure `GEMINI_API_KEY`. The current default model is `gemini-3.5-flash-lite`.
 
 ## Production build
 
@@ -80,7 +83,7 @@ The application uses a backend-neutral `DatabaseBackend` interface.
 
 - `PostgresDb` is the production implementation. It stores the application state in PostgreSQL, wraps each mutation in a transaction, and locks the state row with `SELECT ... FOR UPDATE` to prevent lost updates.
 - `JsonDb` is retained for local development and lightweight tests.
-- `GET /api/health` now verifies the storage layer is readable before returning success.
+- `GET /api/health` verifies the storage layer is readable before returning success.
 
 The current PostgreSQL schema intentionally preserves the existing domain model as one JSONB state document so the application can move to durable hosting without rewriting the services. The repository abstraction leaves room for later normalization into dedicated tables if scale requires it.
 
@@ -177,9 +180,15 @@ No Core service changes are required. For a platform that must publish directly,
 
 ## Integration notes
 
-### OpenAI
+### Automated AI engine — Gemini first
 
-Set `OPENAI_API_KEY`. The adapter calls the Responses API directly with `fetch` and defaults to `gpt-5.6`. Change `OPENAI_MODEL` if desired.
+Set `GEMINI_API_KEY`. The app prefers Gemini and currently defaults to `gemini-3.5-flash-lite`.
+
+`ALLOW_PAID_AI=false` is the default safety lock. While it is false, an OpenAI API key, Vercel AI Gateway key, or Vercel runtime OIDC token cannot activate paid inference.
+
+Direct OpenAI or Vercel AI Gateway remain optional future fallbacks only. To enable a paid route intentionally, the owner must explicitly set `ALLOW_PAID_AI=true` and configure the relevant credentials.
+
+ChatGPT Plus is used as the interactive/operator workspace for Ghaith Web work. A ChatGPT subscription is **not** treated as a server-side API credential for this application.
 
 ### ClickUp
 
@@ -187,15 +196,31 @@ Set `CLICKUP_API_TOKEN` and `CLICKUP_LIST_ID`. Existing tasks can be linked by s
 
 ### Google Drive
 
-The included direct adapter uses an OAuth access token and optional folder ID for asset manifests. In a long-running deployment, replace the static access token with your OAuth refresh-token flow/service account policy.
+The adapter supports either a direct OAuth access token or a refresh-token flow using `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, and `GOOGLE_DRIVE_REFRESH_TOKEN`.
 
-### Canva / HeyGen
+The non-secret default destination is the dedicated **Ghaith Web Content OS — Exports** folder:
 
-The project exposes optional automation bridges via `CANVA_AUTOMATION_WEBHOOK_URL` and `HEYGEN_AUTOMATION_WEBHOOK_URL`. These are deliberately decoupled from Core because authentication and available creation APIs can vary by account/product. They can point to Make scenarios, your own OAuth gateway, or another approved integration layer.
+`GOOGLE_DRIVE_FOLDER_ID=1St07dwbI6JwrARJXBh19Sex7O1Bco2Lv`
+
+It can be overridden if the archive destination changes.
+
+### Canva
+
+Canva supports OAuth directly in the app. Saved Ghaith Web social, carousel, and video source design IDs are configurable through environment variables. `CANVA_AUTOMATION_WEBHOOK_URL` remains an optional bridge for workflows that need an external automation layer.
+
+### HeyGen
+
+HeyGen can run directly with `HEYGEN_API_KEY` or through `HEYGEN_AUTOMATION_WEBHOOK_URL`. Avatar and voice IDs remain optional configuration until a canonical Ghaith Web video SOP is approved.
 
 ### Semrush
 
-`SEMRUSH_API_URL` + `SEMRUSH_API_KEY` provide an optional enrichment bridge. Keep the endpoint configurable so plan/API changes do not affect the Core.
+`SEMRUSH_API_URL` + `SEMRUSH_API_KEY` provide an optional enrichment bridge. Keep the endpoint configurable so plan/API changes do not affect Core.
+
+## Runtime vs ChatGPT-side connections
+
+A service connected to ChatGPT is not automatically a credential available to the deployed Vercel server. The app must report an integration as connected only when the runtime itself has usable authentication.
+
+This distinction is intentional for Google Drive, HeyGen, Semrush and future integrations.
 
 ## Safety / approval design
 
@@ -203,8 +228,9 @@ The project exposes optional automation bridges via `CANVA_AUTOMATION_WEBHOOK_UR
 - `PUBLISHED` is only set after all target platforms have returned SUCCESS/WARNING.
 - A SHA-256 idempotency key is stored per content + platform + revision.
 - Existing SUCCESS logs prevent duplicate publishing on retries.
-- No secrets are committed; use `.env`.
-- With no Make webhook, publishing is a dry run rather than an accidental live post.
+- No secrets are committed; use `.env` / hosting environment variables.
+- Paid AI is locked by default with `ALLOW_PAID_AI=false`.
+- With no Make webhook, direct webhook publishing is unavailable rather than silently spending or posting through an unintended route.
 
 ## Tests
 
@@ -213,13 +239,15 @@ npm test
 npm run check
 ```
 
+The test suite includes AI-provider routing checks that verify paid credentials cannot bypass `ALLOW_PAID_AI=false`.
+
 ## Project structure
 
 ```text
 src/
   config/          Environment and supported platforms
   core/            Domain models and errors
-  integrations/    OpenAI, ClickUp, Make, Drive, Semrush, Canva, HeyGen
+  integrations/    AI, ClickUp, Make, Drive, Semrush, Canva, HeyGen
   platforms/       Generic Platform Adapter + registry
   repositories/    Database abstraction + PostgreSQL production persistence + JsonDb fallback
   routes/          REST API
@@ -230,7 +258,7 @@ ARCHITECTURE.md
 .env.example
 ```
 
-See `ARCHITECTURE.md` for the Mermaid diagram.
+See `ARCHITECTURE.md` for the Mermaid diagram and `docs/INTEGRATION_STATUS.md` for the current integration boundary/status record.
 
 ## Arabic app setup
 
