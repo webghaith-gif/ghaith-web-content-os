@@ -5,10 +5,10 @@ import { OpenAIAdapter } from '../integrations/openai.adapter';
 export class IntelligenceService {
   constructor(private readonly store: Store, private readonly ai = new OpenAIAdapter()) {}
 
-  async extractOpportunities(reportId: string) {
+  async extractOpportunities(reportId: string, oidcToken?: string) {
     const report = await this.store.getReport(reportId);
-    const candidates = this.ai.enabled
-      ? await this.extractWithAi(report.body)
+    const candidates = this.ai.enabledFor(oidcToken)
+      ? await this.extractWithAi(report.body, oidcToken)
       : heuristicCandidates(report.body);
 
     const saved = [];
@@ -23,10 +23,11 @@ export class IntelligenceService {
     return saved;
   }
 
-  private async extractWithAi(body: string): Promise<Array<{ title: string; rationale: string }>> {
+  private async extractWithAi(body: string, oidcToken?: string): Promise<Array<{ title: string; rationale: string }>> {
     const text = await this.ai.generateText(
       'Extract up to 10 actionable content/product opportunities for Ghaith Web. Return JSON only: [{"title":"...","rationale":"..."}]. Focus on digital products, AI, education, entrepreneurship and practical user problems.',
       body,
+      oidcToken,
     );
     try {
       const parsed = JSON.parse(text) as Array<{ title: string; rationale: string }>;
