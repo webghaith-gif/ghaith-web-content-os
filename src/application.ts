@@ -35,7 +35,7 @@ export function createApp() {
     openai: new OpenAIAdapter(),
     clickup: new ClickUpAdapter(),
     make: new MakeAdapter(),
-    googleDrive: new GoogleDriveAdapter(),
+    googleDrive: new GoogleDriveAdapter(store),
     semrush: new SemrushAdapter(),
     canva: new CanvaAdapter(store),
     heygen: new HeyGenAdapter(),
@@ -55,6 +55,7 @@ export function createApp() {
         return sendJson(res, 200, { ok: true, service: 'Ghaith Web Content OS', storage: env.STORAGE_DRIVER, platforms: platforms.list() });
       }
       if (url.pathname === '/api/system' && method === 'GET') {
+        const driveStatus = await integrations.googleDrive.oauthStatus();
         return sendJson(res, 200, {
           service: 'Ghaith Web Content OS',
           publishMode: env.PUBLISH_MODE,
@@ -65,7 +66,7 @@ export function createApp() {
             'Gemini Automation': integrations.openai.enabledFor(oidcToken),
             ClickUp: integrations.clickup.enabled,
             Make: integrations.make.enabled,
-            'Google Drive': integrations.googleDrive.enabled,
+            'Google Drive': driveStatus.connected,
             Semrush: integrations.semrush.enabled,
             Canva: integrations.canva.enabled,
             HeyGen: integrations.heygen.enabled,
@@ -73,7 +74,10 @@ export function createApp() {
         });
       }
       if (url.pathname === '/api/integrations' && method === 'GET') {
-        const canvaStatus = await integrations.canva.oauthStatus();
+        const [canvaStatus, driveStatus] = await Promise.all([
+          integrations.canva.oauthStatus(),
+          integrations.googleDrive.oauthStatus(),
+        ]);
         return sendJson(res, 200, {
           OpenAI: {
             enabled: integrations.openai.enabledFor(oidcToken),
@@ -82,7 +86,7 @@ export function createApp() {
           },
           ClickUp: { enabled: integrations.clickup.enabled, listId: env.CLICKUP_LIST_ID },
           Make: { enabled: env.PUBLISH_MODE === 'webhook' ? integrations.make.enabled : false, paused: env.PUBLISH_MODE === 'clickup_watch' },
-          GoogleDrive: { enabled: integrations.googleDrive.enabled, authMode: integrations.googleDrive.authMode, folderId: env.GOOGLE_DRIVE_FOLDER_ID ?? null },
+          GoogleDrive: driveStatus,
           Semrush: integrations.semrush.configuration(),
           Canva: { enabled: integrations.canva.enabled, mode: integrations.canva.mode, ...canvaStatus },
           HeyGen: { enabled: integrations.heygen.enabled, mode: integrations.heygen.mode, avatarConfigured: Boolean(env.HEYGEN_AVATAR_ID), voiceConfigured: Boolean(env.HEYGEN_VOICE_ID) },
@@ -95,6 +99,31 @@ export function createApp() {
       if (url.pathname === '/api/integrations/openai/test' && method === 'GET') {
         const probe = await integrations.openai.testConnection(oidcToken);
         return sendJson(res, probe.ok ? 200 : 503, probe);
+      }
+      if (url.pathname === '/api/integrations/google-drive/status' && method === 'GET') {
+        return sendJson(res, 200, await integrations.googleDrive.oauthStatus());
+      }
+      if (url.pathname === '/api/integrations/google-drive/connect' && method === 'GET') {
+        const redirectUri = `${requestOrigin(req)}/api/integrations/google-drive/callback`;
+        const authorizationUrl = await integrations.googleDrive.createAuthorizationUrl(redirectUri);
+        res.writeHead(302, { Location: authorizationUrl, 'Cache-Control': 'no-store' });
+        return res.end();
+      }
+      if (url.pathname === '/api/integrations/google-drive/callback' && method === 'GET') {
+        const code = url.searchParams.get('code');
+        const state = url.searchParams.get('state');
+        const oauthError = url.searchParams.get('error');
+        if (oauthError) {
+          res.writeHead(302, { Location: `/?googleDrive=error&reason=${encodeURIComponent(oauthError)}`, 'Cache-Control': 'no-store' });
+          return res.end();
+        }
+        if (!code || !state) {
+          res.writeHead(302, { Location: '/api/integrations/google-drive/connect', 'Cache-Control': 'no-store' });
+          return res.end();
+        }
+        await integrations.googleDrive.handleOAuthCallback(code, state);
+        res.writeHead(302, { Location: '/?googleDrive=connected', 'Cache-Control': 'no-store' });
+        return res.end();
       }
       if (url.pathname === '/api/integrations/google-drive/test' && method === 'GET') {
         const probe = await integrations.googleDrive.testConnection();
