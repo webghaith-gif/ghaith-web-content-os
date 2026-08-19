@@ -28,6 +28,7 @@ jobs:
             local state="$2"
             local description="$3"
             local payload
+            description="$(printf '%s' "$description" | tr '\n\r' '  ' | sed 's/["\\]/ /g' | cut -c1-120)"
             payload=$(printf '{"state":"%s","context":"%s","description":"%s"}' "$state" "$context" "$description")
             curl -fsS -X POST \
               -H "Authorization: Bearer $GH_TOKEN" \
@@ -55,20 +56,16 @@ jobs:
             exit 1
           fi
 
-          asset_state="error"
-          for i in {1..6}; do
-            asset_body="$(curl -fsS -X POST "https://ghaith-web-content-os.vercel.app/api/content/canva-smoke-20260819-0830/assets" 2>/dev/null || true)"
-            echo "Asset attempt $i: $asset_body"
-            if printf '%s' "$asset_body" | grep -q '"provider":"canva"'; then
-              asset_state="success"
-              break
-            fi
-            sleep 5
-          done
+          raw="$(curl -sS -X POST -w '\nHTTP_STATUS:%{http_code}' "https://ghaith-web-content-os.vercel.app/api/content/canva-smoke-20260819-0830/assets" || true)"
+          http_status="$(printf '%s\n' "$raw" | tail -n1 | sed 's/^HTTP_STATUS://')"
+          asset_body="$(printf '%s\n' "$raw" | sed '$d')"
+          echo "Asset HTTP $http_status: $asset_body"
 
-          if [ "$asset_state" = "success" ]; then
+          if printf '%s' "$asset_body" | grep -q '"provider":"canva"'; then
             post_status "canva-asset-smoke" "success" "Canva master design created and exported"
-          else
-            post_status "canva-asset-smoke" "error" "Canva asset generation smoke failed"
-            exit 1
+            exit 0
           fi
+
+          detail="$(printf '%s' "$asset_body" | tr '\n\r' '  ' | sed 's/["\\]/ /g' | cut -c1-90)"
+          post_status "canva-asset-smoke" "error" "HTTP $http_status $detail"
+          exit 1
