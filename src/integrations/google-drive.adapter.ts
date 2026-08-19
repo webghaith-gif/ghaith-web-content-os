@@ -1,5 +1,6 @@
 import { env } from '../config/env';
 import type { Store } from '../repositories/store';
+import type { GoogleDriveWatchState } from '../repositories/database';
 import { GoogleDriveOAuthManager } from './google-drive-oauth';
 
 export interface DriveUploadResult { id: string; name: string; webViewLink?: string; }
@@ -11,6 +12,13 @@ export interface DriveConnectionProbe {
   folderId?: string | null;
   folderName?: string;
   message?: string;
+}
+
+export interface DriveChangedFile {
+  id: string;
+  name: string;
+  mimeType?: string;
+  webViewLink?: string;
 }
 
 export class GoogleDriveAdapter {
@@ -147,6 +155,172 @@ export class GoogleDriveAdapter {
     if (!folder.id) throw new Error('Google Drive did not return an export folder ID.');
     await this.store.setGoogleDriveFolderId(folder.id);
     return folder.id;
+  }
+
+  async watchStatus() {
+    const watch = await this.store?.getGoogleDriveWatch();
+    return {
+      enabled: Boolean(watch && watch.expiration > Date.now()),
+      expiration: watch?.expiration ?? null,
+      webhookUrl: watch?.webhookUrl ?? null,
+      channelId: watch?.channelId ?? null,
+    };
+  }
+
+  async ensureChangesWatch(webhookUrl: string): Promise<GoogleDriveWatchState> {
+    if (!this.store) throw new Error('Google Drive watch storage is unavailable.');
+    const token = await this.getAccessToken();
+    if (!token) throw new Error('Google Drive is not authorized.');
+    const existing = await this.store.getGoogleDriveWatch();
+    const renewalThreshold = Date.now() + 36 * 60 * 60 * 1000;
+    if (existing && existing.expiration > renewalThreshold && existing.webhookUrl === webhookUrl) return existing;
+
+    if (existing?.resourceId) {
+      await fetch('https://www.googleapis.com/drive/v3/channels/stop', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: existing.channelId, resourceId: existing.resourceId }),
+      }).catch(() => undefined);
+    }
+
+    let pageToken = existing?.pageToken;
+    if (!pageToken) {
+      const start = await fetch('https://www.googleapis.com/drive/v3/changes/startPageToken', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!start.ok) throw new Error(`Google Drive start page token failed: ${start.status} ${await start.text()}`);
+      const data = await start.json() as { startPageToken?: string };
+      if (!data.startPageToken) throw new Error('Google Drive did not return startPageToken.');
+      pageToken = data.startPageToken;
+    }
+
+    const channelId = crypto.randomUUID();
+    const channelToken = crypto.randomUUID();
+    const expiration = Date.now() + 6 * 24 * 60 * 60 * 1000;
+    const watchUrl = new URL('https://www.googleapis.com/drive/v3/changes/watch');
+    watchUrl.searchParams.set('pageToken', pageToken);
+    watchUrl.searchParams.set('spaces', 'drive');
+    watchUrl.searchParams.set('supportsAllDrives', 'true');
+    watchUrl.searchParams.set('includeItemsFromAllDrives', 'true');
+    const response = await fetch(watchUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: channelId,
+        type: 'web_hook',
+        address: webhookUrl,
+        token: channelToken,
+        expiration,
+      }),
+    });
+    if (!response.ok) throw new Error(`Google Drive changes.watch failed: ${response.status} ${await response.text()}`);
+    const data = await response.json() as { resourceId?: string; expiration?: string };
+    const state: GoogleDriveWatchState = {
+      channelId,
+      resourceId: data.resourceId,
+      channelToken,
+      expiration: Number(data.expiration ?? expiration),
+      pageToken,
+      knownFileIds: existing?.knownFileIds ?? [],
+      startedAt: existing?.startedAt ?? new Date().toISOString(),
+      webhookUrl,
+    };
+    await this.store.setGoogleDriveWatch(state);
+    return state;
+  }
+
+  async consumeChanges(channelId?: string, channelToken?: string): Promise<DriveChangedFile[]> {
+    if (!this.store) throw new Error('Google Drive watch storage is unavailable.');
+    const state = await this.store.getGoogleDriveWatch();
+    if (!state) return [];
+    if (channelId && channelId !== state.channelId) return [];
+    if (channelToken && channelToken !== state.channelToken) return [];
+
+    const accessToken = await this.getAccessToken();
+    if (!accessToken) return [];
+    const rootFolderId = await this.ensureExportFolder();
+    if (!rootFolderId) return [];
+
+    const known = new Set(state.knownFileIds ?? []);
+    const newFiles: DriveChangedFile[] = [];
+    let pageToken = state.pageToken;
+    const metadataCache = new Map<string, { id: string; parents?: string[]; mimeType?: string }>();
+
+    for (let page = 0; page < 20; page += 1) {
+      const request = new URL('https://www.googleapis.com/drive/v3/changes');
+      request.searchParams.set('pageToken', pageToken);
+      request.searchParams.set('spaces', 'drive');
+      request.searchParams.set('includeRemoved', 'true');
+      request.searchParams.set('supportsAllDrives', 'true');
+      request.searchParams.set('includeItemsFromAllDrives', 'true');
+      request.searchParams.set('pageSize', '100');
+      request.searchParams.set('fields', 'nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,mimeType,parents,webViewLink,trashed))');
+      const response = await fetch(request, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!response.ok) throw new Error(`Google Drive changes.list failed: ${response.status} ${await response.text()}`);
+      const data = await response.json() as {
+        nextPageToken?: string;
+        newStartPageToken?: string;
+        changes?: Array<{ fileId?: string; removed?: boolean; file?: { id?: string; name?: string; mimeType?: string; parents?: string[]; webViewLink?: string; trashed?: boolean } }>;
+      };
+
+      for (const change of data.changes ?? []) {
+        const fileId = change.file?.id ?? change.fileId;
+        if (!fileId) continue;
+        if (change.removed || change.file?.trashed) {
+          known.delete(fileId);
+          continue;
+        }
+        const file = change.file;
+        if (!file?.id) continue;
+        const inside = await this.isWithinTree(file, rootFolderId, accessToken, metadataCache);
+        if (!inside) {
+          known.delete(fileId);
+          continue;
+        }
+        if (!known.has(fileId)) {
+          known.add(fileId);
+          if (file.mimeType !== 'application/vnd.google-apps.folder') {
+            newFiles.push({ id: file.id, name: file.name ?? 'ملف جديد', mimeType: file.mimeType, webViewLink: file.webViewLink });
+          }
+        }
+      }
+
+      if (data.nextPageToken) {
+        pageToken = data.nextPageToken;
+        continue;
+      }
+      pageToken = data.newStartPageToken ?? pageToken;
+      break;
+    }
+
+    await this.store.setGoogleDriveWatch({ ...state, pageToken, knownFileIds: [...known].slice(-10000) });
+    return newFiles;
+  }
+
+  private async isWithinTree(
+    file: { id?: string; parents?: string[] },
+    rootFolderId: string,
+    accessToken: string,
+    cache: Map<string, { id: string; parents?: string[]; mimeType?: string }>,
+    depth = 0,
+  ): Promise<boolean> {
+    if (file.id === rootFolderId) return true;
+    const parents = file.parents ?? [];
+    if (parents.includes(rootFolderId)) return true;
+    if (depth >= 12 || parents.length === 0) return false;
+    for (const parentId of parents) {
+      let parent = cache.get(parentId);
+      if (!parent) {
+        const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(parentId)}?fields=id,parents,mimeType&supportsAllDrives=true`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!response.ok) continue;
+        parent = await response.json() as { id: string; parents?: string[]; mimeType?: string };
+        cache.set(parentId, parent);
+      }
+      if (await this.isWithinTree(parent, rootFolderId, accessToken, cache, depth + 1)) return true;
+    }
+    return false;
   }
 
   private async getAccessToken(): Promise<string | undefined> {
