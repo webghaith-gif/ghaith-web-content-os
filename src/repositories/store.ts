@@ -7,6 +7,8 @@ import type {
   DatabaseBackend,
   GoogleDriveOAuthPendingState,
   GoogleDriveOAuthTokenState,
+  GoogleDriveWatchState,
+  PushSubscriptionState,
 } from './database';
 
 export class Store {
@@ -111,6 +113,56 @@ export class Store {
     await this.db.mutate((db) => {
       db.integrations.googleDrive ??= {};
       db.integrations.googleDrive.folderId = folderId;
+    });
+  }
+  async getGoogleDriveWatch(): Promise<GoogleDriveWatchState | undefined> {
+    return (await this.db.read()).integrations.googleDrive?.watch;
+  }
+  async setGoogleDriveWatch(watch: GoogleDriveWatchState | undefined): Promise<void> {
+    await this.db.mutate((db) => {
+      db.integrations.googleDrive ??= {};
+      db.integrations.googleDrive.watch = watch;
+    });
+  }
+
+  async getPushVapidKeys(): Promise<{ publicKey: string; privateKey: string } | undefined> {
+    const state = (await this.db.read()).integrations.notifications;
+    return state?.vapidPublicKey && state.vapidPrivateKey
+      ? { publicKey: state.vapidPublicKey, privateKey: state.vapidPrivateKey }
+      : undefined;
+  }
+  async setPushVapidKeys(publicKey: string, privateKey: string): Promise<void> {
+    await this.db.mutate((db) => {
+      db.integrations.notifications ??= {};
+      db.integrations.notifications.vapidPublicKey = publicKey;
+      db.integrations.notifications.vapidPrivateKey = privateKey;
+    });
+  }
+  async listPushSubscriptions(): Promise<PushSubscriptionState[]> {
+    return [...((await this.db.read()).integrations.notifications?.subscriptions ?? [])];
+  }
+  async upsertPushSubscription(input: Omit<PushSubscriptionState, 'createdAt' | 'updatedAt'>): Promise<PushSubscriptionState> {
+    const now = new Date().toISOString();
+    return this.db.mutate((db) => {
+      db.integrations.notifications ??= {};
+      db.integrations.notifications.subscriptions ??= [];
+      const index = db.integrations.notifications.subscriptions.findIndex((item) => item.endpoint === input.endpoint);
+      const existing = index >= 0 ? db.integrations.notifications.subscriptions[index] : undefined;
+      const subscription: PushSubscriptionState = {
+        ...input,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+      if (index >= 0) db.integrations.notifications.subscriptions[index] = subscription;
+      else db.integrations.notifications.subscriptions.push(subscription);
+      return subscription;
+    });
+  }
+  async removePushSubscription(endpoint: string): Promise<void> {
+    await this.db.mutate((db) => {
+      const state = db.integrations.notifications;
+      if (!state?.subscriptions) return;
+      state.subscriptions = state.subscriptions.filter((item) => item.endpoint !== endpoint);
     });
   }
 }
