@@ -45,11 +45,17 @@ export const env = {
   PUBLISH_MAX_RETRIES: numberEnv('PUBLISH_MAX_RETRIES', 3),
   PUBLISH_RETRY_BASE_MS: numberEnv('PUBLISH_RETRY_BASE_MS', 500),
 
-  // Direct OpenAI remains supported when a user explicitly provides a key.
+  // Free-first AI mode. Gemini Free Tier is preferred whenever a key is configured.
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY?.trim() || undefined,
+  GEMINI_MODEL: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash-lite',
+  GEMINI_API_BASE_URL: optionalUrl('GEMINI_API_BASE_URL') ?? 'https://generativelanguage.googleapis.com/v1beta',
+  // Safety lock: paid providers are disabled unless the owner explicitly opts in.
+  ALLOW_PAID_AI: booleanEnv('ALLOW_PAID_AI', false),
+
+  // Direct OpenAI remains available only when ALLOW_PAID_AI=true and a key is provided.
   OPENAI_API_KEY: process.env.OPENAI_API_KEY?.trim() || undefined,
   OPENAI_MODEL: process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-mini',
-  // On Vercel, AI Gateway can authenticate with the automatically provisioned OIDC token,
-  // so production does not require an OpenAI API key to run GPT-powered workflows.
+  // Vercel AI Gateway is also treated as a paid-capable path and is locked by default.
   AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY?.trim() || undefined,
   VERCEL_OIDC_TOKEN: process.env.VERCEL_OIDC_TOKEN?.trim() || undefined,
   AI_GATEWAY_BASE_URL: optionalUrl('AI_GATEWAY_BASE_URL') ?? 'https://ai-gateway.vercel.sh/v1',
