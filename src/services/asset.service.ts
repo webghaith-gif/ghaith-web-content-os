@@ -36,9 +36,10 @@ export class AssetService {
         })
       : undefined;
 
+    const requestedKinds = desiredCanvaKinds(content);
     const designs: CanvaDesignResult[] = [];
     const designErrors: Array<{ kind: CanvaAssetKind; message: string }> = [];
-    for (const assetKind of desiredCanvaKinds(content)) {
+    for (const assetKind of requestedKinds) {
       try {
         const result = await this.canva.requestDesign({
           assetKind,
@@ -66,6 +67,17 @@ export class AssetService {
       }
     }
 
+    // Never report a successful asset request when Canva, our primary factory,
+    // failed to produce every requested design. This also makes production
+    // diagnostics actionable instead of silently returning an empty asset list.
+    if (designs.length === 0 && designErrors.length > 0) {
+      const summary = designErrors
+        .map(({ kind, message }) => `${kind}: ${message}`)
+        .join('; ')
+        .slice(0, 1200);
+      throw new Error(`Canva asset generation failed: ${summary}`);
+    }
+
     const newAssets: AssetRef[] = [];
     const newDriveUrls: string[] = [];
     for (const design of designs) {
@@ -89,7 +101,7 @@ export class AssetService {
       contentId,
       title: content.title,
       primaryAssetFactory: 'canva',
-      requestedKinds: desiredCanvaKinds(content),
+      requestedKinds,
       designs,
       designErrors,
       optionalAvatarSource: avatarVideo,
