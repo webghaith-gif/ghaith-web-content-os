@@ -9,6 +9,16 @@ interface GoogleTokenResponse {
   scope?: string;
 }
 
+type GoogleDriveOAuthAuthMode = 'access_token' | 'oauth_refresh_env' | 'oauth' | 'oauth_pending' | 'none';
+
+interface GoogleDriveOAuthStatus {
+  configured: boolean;
+  connected: boolean;
+  authMode: GoogleDriveOAuthAuthMode;
+  expiresAt: number | null;
+  folderId: string | null;
+}
+
 export class GoogleDriveOAuthManager {
   constructor(private readonly store: Store) {}
 
@@ -16,20 +26,21 @@ export class GoogleDriveOAuthManager {
     return Boolean(env.GOOGLE_DRIVE_CLIENT_ID && env.GOOGLE_DRIVE_CLIENT_SECRET);
   }
 
-  async status() {
+  async status(): Promise<GoogleDriveOAuthStatus> {
     const stored = await this.store.getGoogleDriveOAuthToken();
+    const authMode: GoogleDriveOAuthAuthMode = env.GOOGLE_DRIVE_ACCESS_TOKEN
+      ? 'access_token'
+      : env.GOOGLE_DRIVE_REFRESH_TOKEN
+        ? 'oauth_refresh_env'
+        : stored?.accessToken
+          ? 'oauth'
+          : this.configured
+            ? 'oauth_pending'
+            : 'none';
     return {
       configured: this.configured,
       connected: Boolean(env.GOOGLE_DRIVE_ACCESS_TOKEN || env.GOOGLE_DRIVE_REFRESH_TOKEN || stored?.accessToken),
-      authMode: env.GOOGLE_DRIVE_ACCESS_TOKEN
-        ? 'access_token'
-        : env.GOOGLE_DRIVE_REFRESH_TOKEN
-          ? 'oauth_refresh_env'
-          : stored?.accessToken
-            ? 'oauth'
-            : this.configured
-              ? 'oauth_pending'
-              : 'none',
+      authMode,
       expiresAt: stored?.expiresAt ?? null,
       folderId: env.GOOGLE_DRIVE_FOLDER_ID ?? await this.store.getGoogleDriveFolderId() ?? null,
     };
@@ -51,8 +62,6 @@ export class GoogleDriveOAuthManager {
     url.searchParams.set('scope', env.GOOGLE_DRIVE_SCOPES);
     url.searchParams.set('access_type', 'offline');
     url.searchParams.set('include_granted_scopes', 'true');
-    // Force a consent screen so Google returns a refresh token even if the account
-    // previously authorized an earlier version of this app.
     url.searchParams.set('prompt', 'consent');
     url.searchParams.set('state', state);
     return url.toString();
