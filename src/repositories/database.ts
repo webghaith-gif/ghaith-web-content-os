@@ -14,10 +14,28 @@ export interface CanvaOAuthPendingState {
   expiresAt: number;
 }
 
+export interface GoogleDriveOAuthTokenState {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  scope?: string;
+}
+
+export interface GoogleDriveOAuthPendingState {
+  state: string;
+  redirectUri: string;
+  expiresAt: number;
+}
+
 export interface IntegrationState {
   canva?: {
     token?: CanvaOAuthTokenState;
     pending?: CanvaOAuthPendingState;
+  };
+  googleDrive?: {
+    token?: GoogleDriveOAuthTokenState;
+    pending?: GoogleDriveOAuthPendingState;
+    folderId?: string;
   };
 }
 
