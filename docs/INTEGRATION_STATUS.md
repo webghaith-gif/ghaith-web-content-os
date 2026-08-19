@@ -11,7 +11,7 @@ Updated: 2026-08-19
 | Vercel AI Gateway | Locked | Optional API key/OIDC | Never used while `ALLOW_PAID_AI=false`, including request-scoped Vercel OIDC. |
 | ClickUp | Connected | Existing runtime credential | Operational workflow/list is configured. |
 | Canva | Connected | OAuth | Primary asset factory. |
-| Google Drive | Pending runtime OAuth | OAuth/access token required | Canonical folder ID is already fixed to `1mwDLk-Lxv10vMWD7QOO-m2_Beqk0MU2G`; no folder ID entry is needed later. |
+| Google Drive | Pending runtime OAuth | OAuth/access token required | Dedicated export folder `Ghaith Web Content OS — Exports` is ready with ID `1St07dwbI6JwrARJXBh19Sex7O1Bco2Lv`, under the reference folder. No folder ID entry is needed later. |
 | HeyGen | Pending runtime auth | API key or automation webhook required | Optional video source; not required for core app operation. |
 | Semrush | Pending runtime API access | API key/units required | Country default is Tunisia (`TN`). |
 | Make | Pending runtime webhook | Webhook URL required for direct webhook mode | ClickUp-watch mode can remain the operational handoff until Make is re-enabled. |
