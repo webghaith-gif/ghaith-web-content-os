@@ -1,0 +1,29 @@
+name: Canva Production Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/canva-production-smoke.yml'
+
+jobs:
+  canva-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for production rollout
+        run: sleep 35
+      - name: Verify Canva OAuth and API access
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://ghaith-web-content-os.vercel.app/api/integrations/canva/test"
+          for i in {1..12}; do
+            body="$(curl -fsS "$url" 2>/dev/null || true)"
+            echo "Attempt $i: $body"
+            if printf '%s' "$body" | grep -q '"ok":true'; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Canva production smoke test did not return ok=true" >&2
+          exit 1
