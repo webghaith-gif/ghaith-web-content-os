@@ -22,3 +22,11 @@ declare module "pg" {
     on?(event: string, listener: (error: Error) => void): void;
   }
 }
+declare module "web-push" {
+  const webpush: {
+    generateVAPIDKeys(): { publicKey: string; privateKey: string };
+    setVapidDetails(subject: string, publicKey: string, privateKey: string): void;
+    sendNotification(subscription: any, payload?: string, options?: any): Promise<any>;
+  };
+  export default webpush;
+}
