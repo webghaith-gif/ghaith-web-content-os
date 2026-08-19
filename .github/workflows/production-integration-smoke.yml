@@ -29,7 +29,7 @@ jobs:
           body=''
           ok='false'
           for attempt in {1..10}; do
-            body="$(curl -fsS "$endpoint" 2>/dev/null || true)"
+            body="$(curl -sS "$endpoint" 2>/dev/null || true)"
             echo "Attempt $attempt: $body"
             if printf '%s' "$body" | grep -q '"ok":true'; then
               ok='true'
@@ -43,8 +43,12 @@ jobs:
           if [ "$ok" = 'true' ]; then
             state='success'
             description='GPT production integration verified'
+          else
+            safe="$(printf '%s' "$body" | tr '\n\r' '  ' | sed -E 's/(token|secret|authorization|bearer)[^,}]*/\1=[REDACTED]/Ig' | sed 's/["\\]/ /g' | cut -c1-90)"
+            description="GPT failed: ${safe}"
           fi
 
+          description="$(printf '%s' "$description" | cut -c1-120)"
           payload=$(printf '{"state":"%s","context":"gpt-production-smoke","description":"%s"}' "$state" "$description")
           curl -fsS -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
