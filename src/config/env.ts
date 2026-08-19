@@ -45,8 +45,15 @@ export const env = {
   PUBLISH_MAX_RETRIES: numberEnv('PUBLISH_MAX_RETRIES', 3),
   PUBLISH_RETRY_BASE_MS: numberEnv('PUBLISH_RETRY_BASE_MS', 500),
 
+  // Direct OpenAI remains supported when a user explicitly provides a key.
   OPENAI_API_KEY: process.env.OPENAI_API_KEY?.trim() || undefined,
-  OPENAI_MODEL: process.env.OPENAI_MODEL?.trim() || 'gpt-5.6',
+  OPENAI_MODEL: process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-mini',
+  // On Vercel, AI Gateway can authenticate with the automatically provisioned OIDC token,
+  // so production does not require an OpenAI API key to run GPT-powered workflows.
+  AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY?.trim() || undefined,
+  VERCEL_OIDC_TOKEN: process.env.VERCEL_OIDC_TOKEN?.trim() || undefined,
+  AI_GATEWAY_BASE_URL: optionalUrl('AI_GATEWAY_BASE_URL') ?? 'https://ai-gateway.vercel.sh/v1',
+  AI_GATEWAY_MODEL: process.env.AI_GATEWAY_MODEL?.trim() || 'openai/gpt-5.4-mini',
 
   CLICKUP_API_TOKEN: process.env.CLICKUP_API_TOKEN?.trim() || undefined,
   CLICKUP_LIST_ID: process.env.CLICKUP_LIST_ID?.trim() || '901524471002',
