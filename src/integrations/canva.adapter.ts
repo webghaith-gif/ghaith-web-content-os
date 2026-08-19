@@ -12,6 +12,8 @@ export interface CanvaConnectionProbe {
   mode: 'access_token' | 'oauth' | 'webhook' | 'none';
   brandKitId?: string;
   sources: { social: boolean; carousel: boolean; video: boolean };
+  capabilities?: string[];
+  autofillCapable?: boolean;
   message?: string;
 }
 
@@ -85,7 +87,21 @@ export class CanvaAdapter {
     try {
       const response = await this.api('/users/me/profile');
       if (!response.ok) return { ok: false, ...base, message: `Canva returned ${response.status}.` };
-      return { ok: true, ...base };
+
+      const capabilitiesResponse = await this.api('/users/me/capabilities');
+      if (!capabilitiesResponse.ok) {
+        return { ok: true, ...base, message: `Canva capability check returned ${capabilitiesResponse.status}.` };
+      }
+      const capabilityBody = await capabilitiesResponse.json() as { capabilities?: unknown };
+      const capabilities = Array.isArray(capabilityBody.capabilities)
+        ? capabilityBody.capabilities.filter((value): value is string => typeof value === 'string')
+        : [];
+      return {
+        ok: true,
+        ...base,
+        capabilities,
+        autofillCapable: capabilities.includes('autofill'),
+      };
     } catch (error) {
       return { ok: false, ...base, message: error instanceof Error ? error.message : String(error) };
     }
