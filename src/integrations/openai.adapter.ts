@@ -15,23 +15,30 @@ export interface OpenAIConnectionProbe {
 }
 
 export class OpenAIAdapter {
-  get mode(): OpenAIAuthMode {
+  modeFor(oidcToken?: string): OpenAIAuthMode {
     if (env.OPENAI_API_KEY) return 'openai_api';
-    if (env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN) return 'vercel_ai_gateway';
+    if (env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN || oidcToken) return 'vercel_ai_gateway';
     return 'none';
   }
 
-  get enabled() { return this.mode !== 'none'; }
-  get model() { return this.mode === 'vercel_ai_gateway' ? env.AI_GATEWAY_MODEL : env.OPENAI_MODEL; }
+  enabledFor(oidcToken?: string) { return this.modeFor(oidcToken) !== 'none'; }
+  get enabled() { return this.enabledFor(); }
+  get mode() { return this.modeFor(); }
+  modelFor(oidcToken?: string) {
+    return this.modeFor(oidcToken) === 'vercel_ai_gateway' ? env.AI_GATEWAY_MODEL : env.OPENAI_MODEL;
+  }
+  get model() { return this.modelFor(); }
 
-  async testConnection(): Promise<OpenAIConnectionProbe> {
-    const base = { enabled: this.enabled, model: this.model, mode: this.mode } as const;
-    if (!this.enabled) {
+  async testConnection(oidcToken?: string): Promise<OpenAIConnectionProbe> {
+    const mode = this.modeFor(oidcToken);
+    const model = this.modelFor(oidcToken);
+    const base = { enabled: mode !== 'none', model, mode } as const;
+    if (mode === 'none') {
       return { ok: false, ...base, message: 'No OpenAI API key or Vercel AI Gateway OIDC token is available.' };
     }
 
     try {
-      if (this.mode === 'openai_api') {
+      if (mode === 'openai_api') {
         const response = await fetch('https://api.openai.com/v1/models', {
           headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` },
         });
@@ -39,14 +46,12 @@ export class OpenAIAdapter {
         return { ok: true, ...base };
       }
 
-      // AI Gateway does not require a long-lived provider key on Vercel. A tiny Responses
-      // request validates both OIDC authentication and model routing end to end.
       const response = await this.requestResponses({
-        model: this.model,
+        model,
         input: 'Reply with OK.',
         max_output_tokens: 8,
         store: false,
-      });
+      }, oidcToken);
       if (!response.ok) return { ok: false, ...base, message: `Vercel AI Gateway returned ${response.status}.` };
       return { ok: true, ...base };
     } catch (error) {
@@ -54,14 +59,15 @@ export class OpenAIAdapter {
     }
   }
 
-  async generateText(instructions: string, input: string): Promise<string> {
-    if (!this.enabled) throw new Error('GPT is not configured: no OpenAI key or Vercel AI Gateway OIDC token is available.');
+  async generateText(instructions: string, input: string, oidcToken?: string): Promise<string> {
+    const mode = this.modeFor(oidcToken);
+    if (mode === 'none') throw new Error('GPT is not configured: no OpenAI key or Vercel AI Gateway OIDC token is available.');
     const response = await this.requestResponses({
-      model: this.model,
+      model: this.modelFor(oidcToken),
       instructions,
       input,
       store: false,
-    });
+    }, oidcToken);
     if (!response.ok) throw new Error(`GPT request failed: ${response.status} ${await response.text()}`);
     const data = await response.json() as OpenAIResponse;
     if (data.output_text) return data.output_text;
@@ -71,10 +77,11 @@ export class OpenAIAdapter {
     return '';
   }
 
-  private requestResponses(body: Record<string, unknown>) {
-    const gateway = this.mode === 'vercel_ai_gateway';
+  private requestResponses(body: Record<string, unknown>, oidcToken?: string) {
+    const mode = this.modeFor(oidcToken);
+    const gateway = mode === 'vercel_ai_gateway';
     const token = gateway
-      ? env.AI_GATEWAY_API_KEY ?? env.VERCEL_OIDC_TOKEN
+      ? env.AI_GATEWAY_API_KEY ?? env.VERCEL_OIDC_TOKEN ?? oidcToken
       : env.OPENAI_API_KEY;
     if (!token) throw new Error('GPT authentication token is unavailable.');
     const baseUrl = gateway ? env.AI_GATEWAY_BASE_URL : 'https://api.openai.com/v1';

@@ -45,6 +45,9 @@ export function createApp() {
     try {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
       const method = req.method ?? 'GET';
+      // Vercel Functions expose the short-lived OIDC token on each runtime request.
+      // Keep it request-scoped; never persist it or return it to the browser.
+      const oidcToken = requestHeader(req, 'x-vercel-oidc-token');
 
       if (method === 'GET' && isStaticPath(url.pathname)) return sendStatic(res, url.pathname);
       if (url.pathname === '/api/health' && method === 'GET') {
@@ -59,7 +62,7 @@ export function createApp() {
           platforms: platforms.list(),
           clickupListId: env.CLICKUP_LIST_ID ?? null,
           integrations: {
-            ChatGPT: integrations.openai.enabled,
+            ChatGPT: integrations.openai.enabledFor(oidcToken),
             ClickUp: integrations.clickup.enabled,
             Make: env.PUBLISH_MODE === 'clickup_watch' ? integrations.clickup.enabled : integrations.make.enabled,
             'Google Drive': integrations.googleDrive.enabled,
@@ -72,7 +75,11 @@ export function createApp() {
       if (url.pathname === '/api/integrations' && method === 'GET') {
         const canvaStatus = await integrations.canva.oauthStatus();
         return sendJson(res, 200, {
-          OpenAI: { enabled: integrations.openai.enabled, model: env.OPENAI_MODEL },
+          OpenAI: {
+            enabled: integrations.openai.enabledFor(oidcToken),
+            model: integrations.openai.modelFor(oidcToken),
+            mode: integrations.openai.modeFor(oidcToken),
+          },
           ClickUp: { enabled: integrations.clickup.enabled, listId: env.CLICKUP_LIST_ID },
           Make: { enabled: env.PUBLISH_MODE === 'webhook' ? integrations.make.enabled : false, paused: env.PUBLISH_MODE === 'clickup_watch' },
           GoogleDrive: { enabled: integrations.googleDrive.enabled, authMode: integrations.googleDrive.authMode, folderId: env.GOOGLE_DRIVE_FOLDER_ID ?? null },
@@ -86,7 +93,7 @@ export function createApp() {
         return sendJson(res, probe.ok ? 200 : 503, probe);
       }
       if (url.pathname === '/api/integrations/openai/test' && method === 'GET') {
-        const probe = await integrations.openai.testConnection();
+        const probe = await integrations.openai.testConnection(oidcToken);
         return sendJson(res, probe.ok ? 200 : 503, probe);
       }
       if (url.pathname === '/api/integrations/google-drive/test' && method === 'GET') {
@@ -139,7 +146,7 @@ export function createApp() {
       if (url.pathname === '/api/platforms' && method === 'GET') return sendJson(res, 200, { platforms: platforms.list() });
 
       let match = url.pathname.match(/^\/api\/reports\/([^/]+)\/opportunities$/);
-      if (match && method === 'POST') return sendJson(res, 201, await intelligence.extractOpportunities(match[1]!));
+      if (match && method === 'POST') return sendJson(res, 201, await intelligence.extractOpportunities(match[1]!, oidcToken));
 
       match = url.pathname.match(/^\/api\/opportunities\/([^/]+)\/content$/);
       if (match && method === 'POST') {
@@ -147,7 +154,7 @@ export function createApp() {
         if (!Array.isArray(body.platforms) || body.platforms.length === 0 || body.platforms.some((x: unknown) => typeof x !== 'string')) {
           throw new AppError('platforms must be a non-empty string array.', 400, 'VALIDATION_ERROR');
         }
-        return sendJson(res, 201, await generation.createFromOpportunity(match[1]!, body.platforms as string[]));
+        return sendJson(res, 201, await generation.createFromOpportunity(match[1]!, body.platforms as string[], oidcToken));
       }
 
       match = url.pathname.match(/^\/api\/content\/([^/]+)$/);
@@ -238,6 +245,12 @@ function requestOrigin(req: IncomingMessage): string {
   const forwarded = req.headers['x-forwarded-proto'];
   const protocol = typeof forwarded === 'string' ? forwarded.split(',')[0]!.trim() : 'http';
   return `${protocol}://${req.headers.host ?? 'localhost'}`;
+}
+function requestHeader(req: IncomingMessage, name: string): string | undefined {
+  const value = req.headers[name.toLowerCase()];
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (Array.isArray(value) && typeof value[0] === 'string' && value[0].trim()) return value[0].trim();
+  return undefined;
 }
 function requireString(value: unknown, field: string): asserts value is string {
   if (typeof value !== 'string' || !value.trim()) throw new AppError(`${field} is required.`, 400, 'VALIDATION_ERROR');
