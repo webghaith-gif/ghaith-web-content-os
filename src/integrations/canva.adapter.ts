@@ -202,16 +202,24 @@ export class CanvaAdapter {
     });
     if (!copyResponse.ok) throw new Error(`Canva brand-template copy failed: ${copyResponse.status} ${await copyResponse.text()}`);
     const copied = await copyResponse.json() as { design?: any };
-    if (!copied.design?.id) throw new Error('Canva did not return a design ID.');
+    if (!copied.design?.id) throw new Error('Canva did not return a copied design ID.');
     return copied.design;
   }
 
   private async filterByDesignDataset(designId: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
     const response = await this.api(`/designs/${designId}/dataset`);
     if (!response.ok) throw new Error(`Canva design dataset check failed: ${response.status} ${await response.text()}`);
-    const body = await response.json() as { dataset?: Record<string, unknown> };
-    const allowed = new Set(Object.keys(body.dataset ?? {}));
-    return Object.fromEntries(Object.entries(data).filter(([key]) => allowed.has(key)));
+    const body = await response.json() as { dataset?: Record<string, { type?: string }> };
+    const dataset = body.dataset ?? {};
+    return Object.fromEntries(Object.entries(data).filter(([key, value]) => {
+      const expectedType = dataset[key]?.type;
+      if (!expectedType || !value || typeof value !== 'object') return false;
+      const actualType = typeof (value as { type?: unknown }).type === 'string'
+        ? String((value as { type?: unknown }).type)
+        : '';
+      if (expectedType === 'image') return actualType === 'image' || actualType === 'video';
+      return expectedType === actualType;
+    }));
   }
 
   private async createFallbackDesign(kind: CanvaAssetKind, title: string): Promise<any> {
