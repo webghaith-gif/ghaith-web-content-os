@@ -66,6 +66,14 @@ export const env = {
   CLICKUP_STATUS_PUBLISHED: process.env.CLICKUP_STATUS_PUBLISHED?.trim() || 'published',
 
   PUBLISH_MODE: (process.env.PUBLISH_MODE ?? 'clickup_watch').trim().toLowerCase(),
+  // Vendor-neutral automation bridge. It can point to Make, n8n, or any compatible webhook.
+  // Legacy MAKE_* variables remain supported so the current scenario needs no migration.
+  PUBLISH_WEBHOOK_URL: optionalUrl('PUBLISH_WEBHOOK_URL') ?? optionalUrl('AUTOMATION_WEBHOOK_URL') ?? optionalUrl('MAKE_WEBHOOK_URL'),
+  PUBLISH_WEBHOOK_SECRET:
+    process.env.PUBLISH_WEBHOOK_SECRET?.trim()
+    || process.env.AUTOMATION_WEBHOOK_SECRET?.trim()
+    || process.env.MAKE_WEBHOOK_SECRET?.trim()
+    || undefined,
   MAKE_WEBHOOK_URL: optionalUrl('MAKE_WEBHOOK_URL'),
   MAKE_WEBHOOK_SECRET: process.env.MAKE_WEBHOOK_SECRET?.trim() || undefined,
 
