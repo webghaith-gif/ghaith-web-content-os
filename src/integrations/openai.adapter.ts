@@ -52,7 +52,10 @@ export class OpenAIAdapter {
         max_output_tokens: 8,
         store: false,
       }, oidcToken);
-      if (!response.ok) return { ok: false, ...base, message: `Vercel AI Gateway returned ${response.status}.` };
+      if (!response.ok) {
+        const detail = sanitizeProviderError(await response.text());
+        return { ok: false, ...base, message: `Vercel AI Gateway returned ${response.status}${detail ? `: ${detail}` : '.'}` };
+      }
       return { ok: true, ...base };
     } catch (error) {
       return { ok: false, ...base, message: error instanceof Error ? error.message : String(error) };
@@ -68,7 +71,7 @@ export class OpenAIAdapter {
       input,
       store: false,
     }, oidcToken);
-    if (!response.ok) throw new Error(`GPT request failed: ${response.status} ${await response.text()}`);
+    if (!response.ok) throw new Error(`GPT request failed: ${response.status} ${sanitizeProviderError(await response.text())}`);
     const data = await response.json() as OpenAIResponse;
     if (data.output_text) return data.output_text;
     for (const item of data.output ?? []) {
@@ -96,4 +99,13 @@ export class OpenAIAdapter {
       body: JSON.stringify(body),
     });
   }
+}
+
+function sanitizeProviderError(raw: string): string {
+  return raw
+    .replace(/(bearer\s+)[A-Za-z0-9._~+\/-]+/gi, '$1[REDACTED]')
+    .replace(/(access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret)\s*[=:]\s*["']?[^,"'}\s]+/gi, '$1=[REDACTED]')
+    .replace(/[\r\n]+/g, ' ')
+    .trim()
+    .slice(0, 500);
 }
