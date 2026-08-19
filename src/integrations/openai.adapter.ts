@@ -63,7 +63,7 @@ export class OpenAIAdapter {
 
     try {
       if (mode === 'gemini_api') {
-        const response = await this.requestGemini('Reply with OK.', 'Reply with OK.');
+        const response = await this.requestGeminiWithRetry('Reply with OK.', 'Reply with OK.', 2);
         if (!response.ok) {
           const detail = sanitizeProviderError(await response.text());
           return { ok: false, ...base, message: `Gemini returned ${response.status}${detail ? `: ${detail}` : '.'}` };
@@ -102,7 +102,7 @@ export class OpenAIAdapter {
     }
 
     if (mode === 'gemini_api') {
-      const response = await this.requestGemini(instructions, input);
+      const response = await this.requestGeminiWithRetry(instructions, input, 4);
       if (!response.ok) {
         throw new Error(`Gemini request failed: ${response.status} ${sanitizeProviderError(await response.text())}`);
       }
@@ -143,6 +143,17 @@ export class OpenAIAdapter {
     });
   }
 
+  private async requestGeminiWithRetry(instructions: string, input: string, attempts: number): Promise<Response> {
+    let response = await this.requestGemini(instructions, input);
+    for (let attempt = 1; attempt < attempts && shouldRetryGemini(response.status); attempt += 1) {
+      const retryAfter = retryAfterMs(response.headers.get('retry-after'));
+      const backoff = retryAfter ?? Math.min(8000, 700 * (2 ** (attempt - 1)) + Math.floor(Math.random() * 350));
+      await delay(backoff);
+      response = await this.requestGemini(instructions, input);
+    }
+    return response;
+  }
+
   private requestResponses(body: Record<string, unknown>, oidcToken?: string) {
     if (!env.ALLOW_PAID_AI) throw new Error('Paid AI providers are disabled.');
     const mode = this.modeFor(oidcToken);
@@ -164,6 +175,21 @@ export class OpenAIAdapter {
     });
   }
 }
+
+function shouldRetryGemini(status: number): boolean {
+  return status === 429 || status === 408 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function retryAfterMs(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(30000, seconds * 1000);
+  const at = Date.parse(value);
+  if (!Number.isFinite(at)) return undefined;
+  return Math.max(0, Math.min(30000, at - Date.now()));
+}
+
+function delay(ms: number) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
 function sanitizeProviderError(raw: string): string {
   return raw
