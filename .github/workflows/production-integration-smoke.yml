@@ -1,0 +1,56 @@
+name: Production Integration Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/integrations/openai.adapter.ts'
+      - 'src/config/env.ts'
+      - '.github/workflows/production-integration-smoke.yml'
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Vercel production rollout
+        run: sleep 45
+
+      - name: Verify GPT integration in production
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          endpoint='https://ghaith-web-content-os.vercel.app/api/integrations/openai/test'
+          body=''
+          ok='false'
+          for attempt in {1..10}; do
+            body="$(curl -fsS "$endpoint" 2>/dev/null || true)"
+            echo "Attempt $attempt: $body"
+            if printf '%s' "$body" | grep -q '"ok":true'; then
+              ok='true'
+              break
+            fi
+            sleep 6
+          done
+
+          state='error'
+          description='GPT production integration failed'
+          if [ "$ok" = 'true' ]; then
+            state='success'
+            description='GPT production integration verified'
+          fi
+
+          payload=$(printf '{"state":"%s","context":"gpt-production-smoke","description":"%s"}' "$state" "$description")
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "$payload" >/dev/null
+
+          test "$ok" = 'true'
