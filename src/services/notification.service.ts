@@ -1,4 +1,3 @@
-import webpush from 'web-push';
 import type { Store } from '../repositories/store';
 
 export interface AppNotification {
@@ -40,6 +39,7 @@ export class NotificationService {
   }
 
   async send(notification: AppNotification) {
+    const webpush = await this.webPush();
     const keys = await this.ensureVapidKeys();
     const subscriptions = await this.store.listPushSubscriptions();
     if (!subscriptions.length) return { delivered: 0, failed: 0, subscriptions: 0 };
@@ -80,8 +80,14 @@ export class NotificationService {
   private async ensureVapidKeys() {
     const existing = await this.store.getPushVapidKeys();
     if (existing) return existing;
+    const webpush = await this.webPush();
     const generated = webpush.generateVAPIDKeys();
     await this.store.setPushVapidKeys(generated.publicKey, generated.privateKey);
     return generated;
+  }
+
+  private async webPush() {
+    const module = await import('web-push');
+    return module.default;
   }
 }
