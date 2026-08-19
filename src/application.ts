@@ -11,6 +11,7 @@ import { ApprovalService } from './services/approval.service';
 import { PublishingOrchestrator } from './services/publishing-orchestrator';
 import { MetricsService } from './services/metrics.service';
 import { AssetService } from './services/asset.service';
+import { NotificationService, type AppNotification } from './services/notification.service';
 import { PlatformRegistry } from './platforms/registry';
 import { OpenAIAdapter } from './integrations/openai.adapter';
 import { ClickUpAdapter } from './integrations/clickup.adapter';
@@ -29,6 +30,7 @@ export function createApp() {
   const publishing = new PublishingOrchestrator(store, approval);
   const metrics = new MetricsService(store);
   const assets = new AssetService(store);
+  const notifications = new NotificationService(store);
   const platforms = new PlatformRegistry();
 
   const integrations = {
@@ -41,12 +43,15 @@ export function createApp() {
     heygen: new HeyGenAdapter(),
   };
 
+  const safeNotify = async (notification: AppNotification) => {
+    try { return await notifications.send(notification); }
+    catch (error) { console.warn('Notification delivery failed', error); return undefined; }
+  };
+
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
       const method = req.method ?? 'GET';
-      // Vercel Functions expose the short-lived OIDC token on each runtime request.
-      // Keep it request-scoped; never persist it or return it to the browser.
       const oidcToken = requestHeader(req, 'x-vercel-oidc-token');
 
       if (method === 'GET' && isStaticPath(url.pathname)) return sendStatic(res, url.pathname);
@@ -74,9 +79,11 @@ export function createApp() {
         });
       }
       if (url.pathname === '/api/integrations' && method === 'GET') {
-        const [canvaStatus, driveStatus] = await Promise.all([
+        const [canvaStatus, driveStatus, notificationStatus, driveWatch] = await Promise.all([
           integrations.canva.oauthStatus(),
           integrations.googleDrive.oauthStatus(),
+          notifications.status(),
+          integrations.googleDrive.watchStatus(),
         ]);
         return sendJson(res, 200, {
           OpenAI: {
@@ -86,12 +93,45 @@ export function createApp() {
           },
           ClickUp: { enabled: integrations.clickup.enabled, listId: env.CLICKUP_LIST_ID },
           Make: { enabled: env.PUBLISH_MODE === 'webhook' ? integrations.make.enabled : false, paused: env.PUBLISH_MODE === 'clickup_watch' },
-          GoogleDrive: driveStatus,
+          GoogleDrive: { ...driveStatus, watch: driveWatch },
+          Notifications: notificationStatus,
           Semrush: integrations.semrush.configuration(),
           Canva: { enabled: integrations.canva.enabled, mode: integrations.canva.mode, ...canvaStatus },
           HeyGen: { enabled: integrations.heygen.enabled, mode: integrations.heygen.mode, avatarConfigured: Boolean(env.HEYGEN_AVATAR_ID), voiceConfigured: Boolean(env.HEYGEN_VOICE_ID) },
         });
       }
+
+      if (url.pathname === '/api/notifications/public-key' && method === 'GET') {
+        return sendJson(res, 200, { publicKey: await notifications.publicKey() });
+      }
+      if (url.pathname === '/api/notifications/status' && method === 'GET') {
+        return sendJson(res, 200, await notifications.status());
+      }
+      if (url.pathname === '/api/notifications/subscribe' && method === 'POST') {
+        const subscription = await notifications.subscribe(await readJson(req));
+        let driveWatch: unknown = null;
+        try {
+          driveWatch = await integrations.googleDrive.ensureChangesWatch(`${requestOrigin(req)}/api/webhooks/google-drive`);
+        } catch (error) {
+          console.warn('Drive watch activation after push subscription failed', error);
+        }
+        const delivery = await safeNotify({
+          title: 'تم تفعيل إشعارات غيث ويب ✅',
+          body: 'ستصلك إشعارات عند جاهزية المحتوى وعند وصول ملفات محتوى جديدة إلى Google Drive.',
+          url: '/',
+          tag: 'notifications-enabled',
+        });
+        return sendJson(res, 201, { ok: true, endpoint: subscription.endpoint, delivery, driveWatch });
+      }
+      if (url.pathname === '/api/notifications/test' && method === 'POST') {
+        return sendJson(res, 200, await notifications.send({
+          title: 'اختبار إشعارات غيث ويب 🔔',
+          body: 'الإشعارات تعمل بنجاح على هذا الجهاز.',
+          url: '/',
+          tag: 'notification-test',
+        }));
+      }
+
       if (url.pathname === '/api/integrations/clickup/test' && method === 'GET') {
         const probe = await integrations.clickup.testConnection();
         return sendJson(res, probe.ok ? 200 : 503, probe);
@@ -128,6 +168,46 @@ export function createApp() {
       if (url.pathname === '/api/integrations/google-drive/test' && method === 'GET') {
         const probe = await integrations.googleDrive.testConnection();
         return sendJson(res, probe.ok ? 200 : 503, probe);
+      }
+      if (url.pathname === '/api/integrations/google-drive/watch/status' && method === 'GET') {
+        return sendJson(res, 200, await integrations.googleDrive.watchStatus());
+      }
+      if (url.pathname === '/api/integrations/google-drive/watch/ensure' && method === 'POST') {
+        return sendJson(res, 200, await integrations.googleDrive.ensureChangesWatch(`${requestOrigin(req)}/api/webhooks/google-drive`));
+      }
+      if (url.pathname === '/api/cron/drive-watch' && method === 'GET') {
+        const watch = await integrations.googleDrive.ensureChangesWatch(`${requestOrigin(req)}/api/webhooks/google-drive`);
+        return sendJson(res, 200, { ok: true, expiration: watch.expiration, channelId: watch.channelId });
+      }
+      if (url.pathname === '/api/webhooks/google-drive' && method === 'POST') {
+        const resourceState = requestHeader(req, 'x-goog-resource-state');
+        if (resourceState === 'sync') {
+          res.writeHead(204, { 'Cache-Control': 'no-store' });
+          return res.end();
+        }
+        const changedFiles = await integrations.googleDrive.consumeChanges(
+          requestHeader(req, 'x-goog-channel-id'),
+          requestHeader(req, 'x-goog-channel-token'),
+        );
+        const visible = changedFiles.slice(0, 5);
+        for (const file of visible) {
+          await safeNotify({
+            title: 'ملف محتوى جديد في Google Drive 📁',
+            body: file.name,
+            url: file.webViewLink ?? '/',
+            tag: `drive-file-${file.id}`,
+          });
+        }
+        if (changedFiles.length > visible.length) {
+          await safeNotify({
+            title: 'ملفات محتوى جديدة في Google Drive 📁',
+            body: `تمت إضافة ${changedFiles.length} ملفات جديدة إلى مجلدات غيث ويب.`,
+            url: '/',
+            tag: 'drive-files-summary',
+          });
+        }
+        res.writeHead(204, { 'Cache-Control': 'no-store' });
+        return res.end();
       }
       if (url.pathname === '/api/integrations/semrush/test' && method === 'GET') {
         const probe = integrations.semrush.configuration();
@@ -183,7 +263,14 @@ export function createApp() {
         if (!Array.isArray(body.platforms) || body.platforms.length === 0 || body.platforms.some((x: unknown) => typeof x !== 'string')) {
           throw new AppError('platforms must be a non-empty string array.', 400, 'VALIDATION_ERROR');
         }
-        return sendJson(res, 201, await generation.createFromOpportunity(match[1]!, body.platforms as string[], oidcToken));
+        const content = await generation.createFromOpportunity(match[1]!, body.platforms as string[], oidcToken);
+        await safeNotify({
+          title: 'محتوى جديد جاهز للمراجعة ✨',
+          body: content.title,
+          url: '/?view=content',
+          tag: `content-review-${content.id}`,
+        });
+        return sendJson(res, 201, content);
       }
 
       match = url.pathname.match(/^\/api\/content\/([^/]+)$/);
@@ -202,9 +289,29 @@ export function createApp() {
         if (action === 'review') return sendJson(res, 200, await approval.submitForReview(id));
         if (action === 'approve') {
           const body = await readJson(req, true);
-          return sendJson(res, 200, await approval.approve(id, optionalString(body.approvedBy) ?? 'user'));
+          const content = await approval.approve(id, optionalString(body.approvedBy) ?? 'user');
+          await safeNotify({
+            title: 'المحتوى READY وجاهز للنشر ✅',
+            body: content.title,
+            url: '/?view=content',
+            tag: `content-ready-${content.id}`,
+          });
+          return sendJson(res, 200, content);
         }
-        if (action === 'assets') return sendJson(res, 200, await assets.requestAssets(id));
+        if (action === 'assets') {
+          const before = await store.getContent(id);
+          const content = await assets.requestAssets(id);
+          const added = Math.max(0, (content.googleDriveUrls?.length ?? 0) - (before.googleDriveUrls?.length ?? 0));
+          if (added > 0) {
+            await safeNotify({
+              title: 'أصول المحتوى جاهزة على Google Drive 🎨',
+              body: `${content.title} — تمت إضافة ${added} ملفات/روابط جديدة.`,
+              url: '/?view=content',
+              tag: `content-assets-${content.id}`,
+            });
+          }
+          return sendJson(res, 200, content);
+        }
         if (action === 'publish') return sendJson(res, 200, await publishing.publish(id));
       }
 
@@ -237,6 +344,7 @@ export function createApp() {
 const staticFiles: Record<string, { file: string; type: string }> = {
   '/': { file: 'index.html', type: 'text/html; charset=utf-8' },
   '/app.js': { file: 'app.js', type: 'text/javascript; charset=utf-8' },
+  '/notifications.js': { file: 'notifications.js', type: 'text/javascript; charset=utf-8' },
   '/styles.css': { file: 'styles.css', type: 'text/css; charset=utf-8' },
   '/manifest.webmanifest': { file: 'manifest.webmanifest', type: 'application/manifest+json; charset=utf-8' },
   '/sw.js': { file: 'sw.js', type: 'text/javascript; charset=utf-8' },
