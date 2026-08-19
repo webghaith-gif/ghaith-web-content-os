@@ -42,14 +42,17 @@ CLICKUP_API_TOKEN=
 
 يمكن ترك Make متوقفًا أثناء تجهيز بقية التكاملات. المسار الحالي للأصول لا يعتمد على Make.
 
-## OpenAI
+## الذكاء الاصطناعي — Free First
 
-يستخدم للذكاء وصناعة النصوص والبرومبتات، وليس كمصنع الأصول الرئيسي:
+المسار الافتراضي للأتمتة داخل التطبيق هو Gemini، مع قفل المسارات المدفوعة افتراضيًا:
 
 ```env
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.6
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.5-flash-lite
+ALLOW_PAID_AI=false
 ```
+
+لا تُفعّل OpenAI API أو Vercel AI Gateway إلا بقرار صريح وتغيير `ALLOW_PAID_AI=true`.
 
 ## Canva — مصنع الأصول الرئيسي
 
@@ -92,18 +95,33 @@ Canva هو المسؤول عن التصدير النهائي:
 - Social/Carousel → PNG
 - Video → MP4 (`vertical_1080p` افتراضيًا)
 
-## Google Drive
+## Google Drive — OAuth دائم
 
-يحفظ النسخ المصدرة من Canva وملف Manifest حتى لا نعتمد على روابط Canva المؤقتة:
+يحفظ النسخ المصدرة وملفات Manifest. في الإنتاج نستخدم OAuth دائمًا بدل Access Token المؤقت.
 
 ```env
 GOOGLE_DRIVE_CLIENT_ID=
 GOOGLE_DRIVE_CLIENT_SECRET=
-GOOGLE_DRIVE_REFRESH_TOKEN=
+GOOGLE_DRIVE_SCOPES=https://www.googleapis.com/auth/drive.file
 GOOGLE_DRIVE_FOLDER_ID=
+GOOGLE_DRIVE_FOLDER_NAME=Ghaith Web Content OS — Runtime Exports
 ```
 
-ويبقى `GOOGLE_DRIVE_ACCESS_TOKEN` مناسبًا للاختبار القصير فقط.
+بعد إضافة `CLIENT_ID` و`CLIENT_SECRET` افتح:
+
+`/api/integrations/google-drive/connect`
+
+سيحوّلك التطبيق إلى موافقة Google ثم يعيدك إلى:
+
+`/api/integrations/google-drive/callback`
+
+بعد نجاح الموافقة، يخزن التطبيق Refresh Token في قاعدة البيانات ويجدد Access Token تلقائيًا. وإذا تركت `GOOGLE_DRIVE_FOLDER_ID` فارغًا، ينشئ التطبيق مجلد تصدير خاصًا به ويحفظ معرّفه في قاعدة البيانات. هذا يسمح لنا بالبقاء على نطاق `drive.file` المحدود بدل صلاحية Drive الكاملة.
+
+يمكن اختبار الاتصال عبر:
+
+`GET /api/integrations/google-drive/test`
+
+ويبقى `GOOGLE_DRIVE_ACCESS_TOKEN` و`GOOGLE_DRIVE_REFRESH_TOKEN` بديلين يدويين فقط، وليس المسار المفضل.
 
 ## HeyGen — اختياري
 
@@ -127,4 +145,4 @@ SEMRUSH_COUNTRY=TN
 
 ## ملاحظة الأمان
 
-لا تضع أي API Key أو OAuth secret أو كلمة مرور قاعدة بيانات داخل الواجهة أو GitHub. جميع الأسرار تبقى في متغيرات البيئة على الخادم.
+لا تضع أي API Key أو OAuth secret أو كلمة مرور قاعدة بيانات داخل الواجهة أو GitHub. جميع الأسرار تبقى في متغيرات البيئة على الخادم أو في تخزين OAuth داخل قاعدة البيانات.

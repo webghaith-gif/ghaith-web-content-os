@@ -73,8 +73,11 @@ export const env = {
   GOOGLE_DRIVE_CLIENT_ID: process.env.GOOGLE_DRIVE_CLIENT_ID?.trim() || undefined,
   GOOGLE_DRIVE_CLIENT_SECRET: process.env.GOOGLE_DRIVE_CLIENT_SECRET?.trim() || undefined,
   GOOGLE_DRIVE_REFRESH_TOKEN: process.env.GOOGLE_DRIVE_REFRESH_TOKEN?.trim() || undefined,
-  // Non-secret canonical Ghaith Web export folder. Override only if the archive location changes.
-  GOOGLE_DRIVE_FOLDER_ID: process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || '1St07dwbI6JwrARJXBh19Sex7O1Bco2Lv',
+  // Least-privilege default: the app may manage only files it creates or that the user explicitly grants to it.
+  GOOGLE_DRIVE_SCOPES: process.env.GOOGLE_DRIVE_SCOPES?.trim() || 'https://www.googleapis.com/auth/drive.file',
+  // Optional explicit folder override. When omitted, OAuth mode creates and remembers an app-owned export folder.
+  GOOGLE_DRIVE_FOLDER_ID: process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || undefined,
+  GOOGLE_DRIVE_FOLDER_NAME: process.env.GOOGLE_DRIVE_FOLDER_NAME?.trim() || 'Ghaith Web Content OS — Runtime Exports',
 
   SEMRUSH_API_URL: optionalUrl('SEMRUSH_API_URL') ?? 'https://api.semrush.com/apis/v4/keywords/v1/metrics',
   SEMRUSH_API_KEY: process.env.SEMRUSH_API_KEY?.trim() || undefined,
