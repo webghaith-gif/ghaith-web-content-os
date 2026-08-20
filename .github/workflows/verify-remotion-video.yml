@@ -39,6 +39,8 @@ jobs:
           --concurrency=2
           --timeout=120000
           --props=tests/remotion-sample-props.json
+      - name: Install media inspector
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Validate media
         run: |
           test -s ghaith-remotion-sample.mp4
