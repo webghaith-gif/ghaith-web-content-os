@@ -11,7 +11,7 @@ import {
   useVideoConfig,
 } from 'remotion';
 
-loadFont({ family: 'GhaithArabic', url: staticFile('DejaVuSans.ttf'), weight: '400' });
+loadFont({ family: 'GhaithArabic', url: staticFile('DejaVuSans.ttf'), weight: '400', format: 'truetype' });
 
 export interface GhaithVideoScene {
   title?: string;
