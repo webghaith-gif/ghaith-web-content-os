@@ -95,23 +95,29 @@ export class AssetService {
       }
     }
 
-    let remotionFile: string | undefined;
-    let remotionError: string | undefined;
+    const remotionFiles: Array<{ format: string; ratio: string; url: string; width: number; height: number; platforms: string[] }> = [];
+    const remotionErrors: Array<{ format: string; message: string }> = [];
     if (requestedKinds.includes('video')) {
       try {
-        const video = await this.remotion.renderVideo(content);
-        const file = await this.drive.upsertBytes(`${content.id}-video-remotion.mp4`, video, 'video/mp4', reportFolderId);
-        if (!file?.webViewLink) throw new Error('Google Drive did not return a link for the rendered video.');
-        remotionFile = file.webViewLink;
-        newDriveUrls.push(file.webViewLink);
-        newAssets.push({ kind: 'video', url: file.webViewLink, provider: 'remotion', providerId: file.id });
+        const batch = await this.remotion.renderVideos(content);
+        remotionErrors.push(...batch.errors);
+        for (const video of batch.videos) {
+          const file = await this.drive.upsertBytes(`${content.id}-video-remotion-${video.format}-${video.width}x${video.height}.mp4`, video.bytes, 'video/mp4', reportFolderId);
+          if (!file?.webViewLink) {
+            remotionErrors.push({ format: video.format, message: 'Google Drive did not return a link for the rendered video.' });
+            continue;
+          }
+          remotionFiles.push({ format: video.format, ratio: video.ratio, url: file.webViewLink, width: video.width, height: video.height, platforms: video.platforms });
+          newDriveUrls.push(file.webViewLink);
+          newAssets.push({ kind: 'video', url: file.webViewLink, provider: 'remotion', providerId: file.id, format: video.ratio, width: video.width, height: video.height, platforms: video.platforms });
+        }
       } catch (error) {
-        remotionError = error instanceof Error ? error.message : String(error);
+        remotionErrors.push({ format: 'batch', message: error instanceof Error ? error.message : String(error) });
       }
     }
 
     const succeededKinds = new Set<CanvaAssetKind>(designs.map((design) => design.kind));
-    if (remotionFile) succeededKinds.add('video');
+    if (remotionFiles.length) succeededKinds.add('video');
     const missingKinds = requestedKinds.filter((kind) => !succeededKinds.has(kind));
     const fallbackFiles: string[] = [];
 
@@ -161,7 +167,7 @@ export class AssetService {
       requestedKinds,
       canvaDesigns: designs,
       canvaErrors: designErrors,
-      remotion: { attempted: requestedKinds.includes('video'), file: remotionFile, error: remotionError },
+      remotion: { attempted: requestedKinds.includes('video'), files: remotionFiles, errors: remotionErrors },
       missingKinds,
       fallbackUsedFor: missingKinds.filter((kind) => kind !== 'video'),
       fallbackFiles,
