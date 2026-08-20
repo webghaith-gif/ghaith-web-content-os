@@ -68,7 +68,8 @@ export class GoogleDriveAdapter {
 
   async handleOAuthCallback(code: string, state: string): Promise<void> {
     if (!this.oauth) throw new Error('Google Drive OAuth storage is unavailable.');
-    await this.oauth.handleCallback(code, state);
+    await this.oauth.handleOAuthCallback?.(code, state);
+    if (!this.oauth.handleOAuthCallback) await this.oauth.handleCallback(code, state);
     await this.ensureExportFolder();
   }
 
@@ -89,26 +90,46 @@ export class GoogleDriveAdapter {
     }
   }
 
-  async uploadText(name: string, content: string, mimeType = 'text/plain'): Promise<DriveUploadResult | undefined> {
+  async uploadText(name: string, content: string, mimeType = 'text/plain', parentFolderId?: string): Promise<DriveUploadResult | undefined> {
     const token = await this.getAccessToken();
     if (!token) return undefined;
-    return this.uploadBytes(name, new TextEncoder().encode(content), mimeType);
+    return this.uploadBytes(name, new TextEncoder().encode(content), mimeType, parentFolderId);
   }
 
-  async uploadFromUrl(name: string, url: string, mimeType?: string): Promise<DriveUploadResult | undefined> {
+  async upsertText(name: string, content: string, mimeType = 'text/plain', parentFolderId?: string): Promise<DriveUploadResult | undefined> {
+    const token = await this.getAccessToken();
+    if (!token) return undefined;
+    const folderId = parentFolderId ?? await this.ensureExportFolder();
+    if (!folderId) return undefined;
+    const existing = await this.findFileByName(name, folderId, token);
+    if (!existing) return this.uploadText(name, content, mimeType, folderId);
+
+    const response = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(existing.id)}?uploadType=media&fields=id,name,webViewLink`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': mimeType,
+      },
+      body: content,
+    });
+    if (!response.ok) throw new Error(`Google Drive text update failed: ${response.status} ${await response.text()}`);
+    return response.json() as Promise<DriveUploadResult>;
+  }
+
+  async uploadFromUrl(name: string, url: string, mimeType?: string, parentFolderId?: string): Promise<DriveUploadResult | undefined> {
     const token = await this.getAccessToken();
     if (!token) return undefined;
     const source = await fetch(url);
     if (!source.ok) throw new Error(`Asset download failed: ${source.status} ${source.statusText}`);
     const bytes = new Uint8Array(await source.arrayBuffer());
     const detected = mimeType || source.headers.get('content-type') || 'application/octet-stream';
-    return this.uploadBytes(name, bytes, detected);
+    return this.uploadBytes(name, bytes, detected, parentFolderId);
   }
 
-  async uploadBytes(name: string, bytes: Uint8Array, mimeType: string): Promise<DriveUploadResult | undefined> {
+  async uploadBytes(name: string, bytes: Uint8Array, mimeType: string, parentFolderId?: string): Promise<DriveUploadResult | undefined> {
     const token = await this.getAccessToken();
     if (!token) return undefined;
-    const folderId = await this.ensureExportFolder();
+    const folderId = parentFolderId ?? await this.ensureExportFolder();
     const boundary = `ghaith-${crypto.randomUUID()}`;
     const metadata = JSON.stringify({
       name,
@@ -155,6 +176,44 @@ export class GoogleDriveAdapter {
     if (!folder.id) throw new Error('Google Drive did not return an export folder ID.');
     await this.store.setGoogleDriveFolderId(folder.id);
     return folder.id;
+  }
+
+  async ensureChildFolder(name: string, parentFolderId: string): Promise<string> {
+    const token = await this.getAccessToken();
+    if (!token) throw new Error('Google Drive is not authorized.');
+    const escapedName = escapeDriveQuery(name);
+    const escapedParent = escapeDriveQuery(parentFolderId);
+    const q = `name = '${escapedName}' and '${escapedParent}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+    const listUrl = new URL('https://www.googleapis.com/drive/v3/files');
+    listUrl.searchParams.set('q', q);
+    listUrl.searchParams.set('fields', 'files(id,name)');
+    listUrl.searchParams.set('pageSize', '10');
+    const existingResponse = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } });
+    if (!existingResponse.ok) throw new Error(`Google Drive folder lookup failed: ${existingResponse.status} ${await existingResponse.text()}`);
+    const existing = await existingResponse.json() as { files?: Array<{ id?: string; name?: string }> };
+    const found = existing.files?.find((file) => file.id);
+    if (found?.id) return found.id;
+
+    const createResponse = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [parentFolderId],
+      }),
+    });
+    if (!createResponse.ok) throw new Error(`Google Drive child folder creation failed: ${createResponse.status} ${await createResponse.text()}`);
+    const created = await createResponse.json() as { id?: string };
+    if (!created.id) throw new Error('Google Drive did not return a child folder ID.');
+    return created.id;
+  }
+
+  folderUrl(folderId: string) {
+    return `https://drive.google.com/drive/folders/${encodeURIComponent(folderId)}`;
   }
 
   async watchStatus() {
@@ -297,6 +356,20 @@ export class GoogleDriveAdapter {
     return newFiles;
   }
 
+  private async findFileByName(name: string, parentFolderId: string, accessToken: string): Promise<DriveUploadResult | undefined> {
+    const escapedName = escapeDriveQuery(name);
+    const escapedParent = escapeDriveQuery(parentFolderId);
+    const q = `name = '${escapedName}' and '${escapedParent}' in parents and trashed = false`;
+    const url = new URL('https://www.googleapis.com/drive/v3/files');
+    url.searchParams.set('q', q);
+    url.searchParams.set('fields', 'files(id,name,webViewLink)');
+    url.searchParams.set('pageSize', '10');
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!response.ok) throw new Error(`Google Drive file lookup failed: ${response.status} ${await response.text()}`);
+    const data = await response.json() as { files?: DriveUploadResult[] };
+    return data.files?.find((file) => file.id);
+  }
+
   private async isWithinTree(
     file: { id?: string; parents?: string[] },
     rootFolderId: string,
@@ -344,4 +417,8 @@ export class GoogleDriveAdapter {
     if (!data.access_token) throw new Error('Google OAuth token response did not include access_token.');
     return data.access_token;
   }
+}
+
+function escapeDriveQuery(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
