@@ -8,6 +8,8 @@ export interface AppNotification {
 }
 
 export class NotificationService {
+  private static readonly recentTags = new Map<string, number>();
+
   constructor(private readonly store: Store) {}
 
   async publicKey(): Promise<string> {
@@ -39,17 +41,23 @@ export class NotificationService {
   }
 
   async send(notification: AppNotification) {
-    const webpush = await this.webPush();
-    const keys = await this.ensureVapidKeys();
     const subscriptions = await this.store.listPushSubscriptions();
     if (!subscriptions.length) return { delivered: 0, failed: 0, subscriptions: 0 };
 
+    const tag = notification.tag ?? 'ghaith-web-content-os';
+    const previous = NotificationService.recentTags.get(tag) ?? 0;
+    if (Date.now() - previous < 5000) {
+      return { delivered: 0, failed: 0, subscriptions: subscriptions.length, deduped: true };
+    }
+
+    const webpush = await this.webPush();
+    const keys = await this.ensureVapidKeys();
     webpush.setVapidDetails('mailto:webghaith@gmail.com', keys.publicKey, keys.privateKey);
     const payload = JSON.stringify({
       title: notification.title,
       body: notification.body,
       url: notification.url ?? '/',
-      tag: notification.tag ?? 'ghaith-web-content-os',
+      tag,
       icon: '/icon.svg',
       badge: '/icon.svg',
     });
@@ -71,6 +79,15 @@ export class NotificationService {
           await this.store.removePushSubscription(subscription.endpoint);
         } else {
           console.warn('Push notification failed', status || error?.message || error);
+        }
+      }
+    }
+    if (delivered > 0) {
+      NotificationService.recentTags.set(tag, Date.now());
+      if (NotificationService.recentTags.size > 500) {
+        const cutoff = Date.now() - 60_000;
+        for (const [key, at] of NotificationService.recentTags) {
+          if (at < cutoff) NotificationService.recentTags.delete(key);
         }
       }
     }
