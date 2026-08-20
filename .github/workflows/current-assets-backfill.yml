@@ -1,0 +1,25 @@
+name: Current Assets Backfill
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/current-assets-backfill.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Generate current media and store in Drive
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 300 \
+            -X POST 'https://ghaith-web-content-os.vercel.app/api/opportunities/e319a395-ef1a-4ac8-921f-f8e22219a7c5/content' \
+            -H 'Content-Type: application/json' \
+            -d '{"platforms":["facebook","instagram","tiktok","pinterest","youtube"]}' \
+            | jq '{id,title,status,assets,googleDriveUrls}'
