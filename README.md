@@ -15,7 +15,7 @@ A runnable TypeScript/Node.js orchestration layer that mirrors the existing Ghai
 - Google Drive direct text-manifest upload adapter.
 - Optional OpenAI intelligence/content generation.
 - Optional Semrush enrichment bridge.
-- Optional Canva and HeyGen automation bridges.
+- Canva image/carousel automation, Remotion professional motion rendering, and an optional HeyGen automation bridge.
 - PostgreSQL persistence for production, with transactional mutation locking.
 - JSON persistence retained as a zero-setup local/development fallback.
 - REST API + full responsive Arabic RTL web app / installable PWA.
@@ -189,9 +189,11 @@ Set `CLICKUP_API_TOKEN` and `CLICKUP_LIST_ID`. Existing tasks can be linked by s
 
 The included direct adapter uses an OAuth access token and optional folder ID for asset manifests. In a long-running deployment, replace the static access token with your OAuth refresh-token flow/service account policy.
 
-### Canva / HeyGen
+### Canva / Remotion / HeyGen
 
-The project exposes optional automation bridges via `CANVA_AUTOMATION_WEBHOOK_URL` and `HEYGEN_AUTOMATION_WEBHOOK_URL`. These are deliberately decoupled from Core because authentication and available creation APIs can vary by account/product. They can point to Make scenarios, your own OAuth gateway, or another approved integration layer.
+Canva remains the image and carousel factory. Remotion is the primary vertical-video renderer and runs in an isolated Vercel Sandbox with a bundled Arabic font. The former static-frame MP4 fallback is rejected instead of being recorded as a successful video.
+
+HeyGen presenter videos are optional and are routed through `HEYGEN_AUTOMATION_WEBHOOK_URL`, normally a Make scenario using the current HeyGen connector. The app intentionally does not call legacy HeyGen v1/v2 HTTP generation endpoints.
 
 ### Semrush
 
@@ -219,7 +221,7 @@ npm run check
 src/
   config/          Environment and supported platforms
   core/            Domain models and errors
-  integrations/    OpenAI, ClickUp, Make, Drive, Semrush, Canva, HeyGen
+  integrations/    OpenAI, ClickUp, Make, Drive, Semrush, Canva, HeyGen, Remotion
   platforms/       Generic Platform Adapter + registry
   repositories/    Database abstraction + PostgreSQL production persistence + JsonDb fallback
   routes/          REST API
