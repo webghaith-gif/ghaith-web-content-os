@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-test('Remotion is the video renderer and the static-frame MP4 fallback is disabled', async () => {
+test('Remotion is primary and a real MP4 fallback remains available when the sandbox or Canva fails', async () => {
   const assetService = await readFile('src/services/asset.service.ts', 'utf8');
   const fallbackRenderer = await readFile('src/services/fallback-media-renderer.ts', 'utf8');
   const remotionAdapter = await readFile('src/integrations/remotion.adapter.ts', 'utf8');
@@ -10,9 +10,12 @@ test('Remotion is the video renderer and the static-frame MP4 fallback is disabl
 
   assert.match(assetService, /video-remotion-\$\{video\.format\}/);
   assert.match(assetService, /provider: 'remotion'/);
-  assert.doesNotMatch(assetService, /video-fallback\.mp4/);
-  assert.doesNotMatch(fallbackRenderer, /makeVideo/);
+  assert.match(assetService, /video-fallback\.mp4/);
+  assert.match(fallbackRenderer, /makeVideo/);
+  assert.match(fallbackRenderer, /DejaVuSans\.ttf/);
+  assert.match(fallbackRenderer, /libx264/);
   assert.match(remotionAdapter, /renderMediaOnVercel/);
+  assert.match(remotionAdapter, /sandbox\.mkDir\('remotion-bundle'\)/);
   for (const id of ['GhaithVertical', 'GhaithLandscape', 'GhaithSquare', 'GhaithPortrait', 'GhaithPinterest']) {
     assert.match(remotionRoot, new RegExp(id));
   }
