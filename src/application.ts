@@ -329,7 +329,7 @@ export function createApp() {
         return sendJson(res, 200, await store.updateContent(match[1]!, { ...patch, revision: current.revision + 1 } as any));
       }
 
-      match = url.pathname.match(/^\/api\/content\/([^/]+)\/(review|approve|assets|publish)$/);
+      match = url.pathname.match(/^\/api\/content\/([^/]+)\/(review|approve|assets|repair-assets|publish)$/);
       if (match && method === 'POST') {
         const id = match[1]!; const action = match[2]!;
         if (action === 'review') return sendJson(res, 200, await approval.submitForReview(id));
@@ -357,6 +357,20 @@ export function createApp() {
             });
           }
           return sendJson(res, 200, content);
+        }
+        if (action === 'repair-assets') {
+          const result = await assets.repairFallbackAssets(id);
+          if (result.repairedFiles.length > 0) {
+            await safeNotify({
+              title: result.complete ? 'تم إصلاح أصول المحتوى على Google Drive 🛠️' : 'إصلاح الأصول غير مكتمل على Google Drive ⚠️',
+              body: result.complete
+                ? `${result.content.title} — تم إنشاء ${result.repairedFiles.length} أصول فعلية بخط عربي مضمّن.`
+                : `${result.content.title} — الأصول الناقصة: ${result.missingKinds.join(', ')}.`,
+              url: '/?view=content',
+              tag: `content-assets-repaired-${result.content.id}`,
+            });
+          }
+          return sendJson(res, 200, result);
         }
         if (action === 'publish') return sendJson(res, 200, await publishing.publish(id));
       }

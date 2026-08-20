@@ -1,12 +1,22 @@
+import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import sharp from 'sharp';
+import ffmpegPath from 'ffmpeg-static';
 import { PDFDocument } from 'pdf-lib';
 import type { ContentItem } from '../core/types';
+
+const execFileAsync = promisify(execFile);
 
 export interface RenderedMedia {
   social?: Uint8Array;
   carouselSlides: Uint8Array[];
   carouselPdf?: Uint8Array;
+  video?: Uint8Array;
+  videoError?: string;
 }
 
 export async function renderFallbackMedia(content: ContentItem): Promise<RenderedMedia> {
@@ -24,7 +34,7 @@ export async function renderFallbackMedia(content: ContentItem): Promise<Rendere
   for (let index = 0; index < 5; index += 1) {
     const slide = slides[index] ?? {};
     const points = Array.isArray(slide.points) ? slide.points.filter(Boolean).slice(0, 4) : [];
-    const body = [slide.body ?? '', ...points.map((x) => `• ${x}`)].filter(Boolean).join('\n');
+    const body = [slide.body ?? '', ...points.map((x) => `\u200F${x} •`)].filter(Boolean).join('\n');
     carouselSlides.push(await renderPng({
       width: 1080,
       height: 1350,
@@ -37,7 +47,31 @@ export async function renderFallbackMedia(content: ContentItem): Promise<Rendere
 
   const carouselPdf = await makePdf(carouselSlides, 1080, 1350);
 
-  return { social, carouselSlides, carouselPdf };
+  const scenes = (content.package.videoScenes ?? []).slice(0, 3);
+  const videoFrames: Uint8Array[] = [];
+  for (let index = 0; index < 3; index += 1) {
+    const scene = scenes[index] ?? {};
+    videoFrames.push(await renderPng({
+      width: 1080,
+      height: 1920,
+      eyebrow: `GHAITH WEB  •  ${String(index + 1).padStart(2, '0')}/03`,
+      title: scene.title || content.package.hook || content.title,
+      body: scene.body || content.package.script || content.package.caption || content.package.description || '',
+      footer: 'غيث ويب',
+    }));
+  }
+
+  try {
+    const video = await makeVideo(videoFrames);
+    return { social, carouselSlides, carouselPdf, video };
+  } catch (error) {
+    return {
+      social,
+      carouselSlides,
+      carouselPdf,
+      videoError: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 async function renderPng(input: { width: number; height: number; eyebrow: string; title: string; body: string; footer: string }) {
@@ -45,8 +79,10 @@ async function renderPng(input: { width: number; height: number; eyebrow: string
   const margin = Math.round(width * 0.075);
   const titleSize = height > 1500 ? 76 : height > 1200 ? 62 : 58;
   const bodySize = height > 1500 ? 42 : 36;
-  const titleLines = wrapArabic(input.title, height > 1500 ? 19 : 24, 4);
-  const bodyLines = wrapArabic(input.body, height > 1500 ? 31 : 38, height > 1500 ? 8 : 7);
+  const title = safeVisualText(input.title);
+  const body = safeVisualText(input.body);
+  const titleLines = wrapArabic(title, height > 1500 ? 19 : 24, 4);
+  const bodyLines = wrapArabic(body, height > 1500 ? 31 : 38, height > 1500 ? 8 : 7);
   const titleY = height > 1500 ? 470 : height > 1200 ? 340 : 290;
   const bodyY = titleY + titleLines.length * (titleSize + 18) + 54;
   const fontfile = path.join(__dirname, '..', 'assets', 'DejaVuSans.ttf');
@@ -63,7 +99,7 @@ async function renderPng(input: { width: number; height: number; eyebrow: string
     { input: layers[2]!, left: margin, top: bodyY },
     { input: layers[3]!, left: margin, top: height - 105 },
   ]).png({ compressionLevel: 8 }).toBuffer();
-  await assertReadableText(output, input);
+  await assertReadableText(output, { ...input, title, body });
   return new Uint8Array(output);
 }
 
@@ -79,9 +115,15 @@ function buildBackgroundSvg(width: number, height: number, margin: number) {
 }
 
 async function textLayer(value: string, width: number, height: number, size: number, color: string, fontfile: string, bold: boolean) {
-  if (!value.trim()) return sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
+  if (!value.trim()) return transparentLayer(width, height);
   const markup = `<span foreground="${color}" weight="${bold ? 'bold' : 'normal'}" size="${size * 700}">${escapeXml(value)}</span>`;
-  return sharp({ text: { text: markup, fontfile, width, height, align: 'right', rgba: true } }).png().toBuffer();
+  const rendered = await sharp({ text: { text: markup, fontfile, width, height, align: 'right', rgba: true } }).png().toBuffer();
+  const metadata = await sharp(rendered).metadata();
+  const left = containsArabic(value) ? Math.max(0, width - (metadata.width ?? width)) : 0;
+  return sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite([{ input: rendered, left, top: 0 }])
+    .png()
+    .toBuffer();
 }
 
 async function assertReadableText(output: Buffer, input: { width: number; height: number; title: string; body: string }) {
@@ -96,20 +138,37 @@ async function assertReadableText(output: Buffer, input: { width: number; height
 }
 
 function wrapArabic(value: string, maxChars: number, maxLines: number) {
-  const words = String(value ?? '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const paragraphs = String(value ?? '')
+    .replace(/[^\S\r\n]+/g, ' ')
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
   const lines: string[] = [];
-  let current = '';
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length <= maxChars || !current) current = candidate;
-    else {
-      lines.push(current);
-      current = word;
-      if (lines.length >= maxLines - 1) break;
+  let truncated = false;
+  for (const paragraph of paragraphs) {
+    let current = '';
+    for (const word of paragraph.split(' ').filter(Boolean)) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (candidate.length <= maxChars || !current) {
+        current = candidate;
+      } else {
+        lines.push(current);
+        current = word;
+        if (lines.length >= maxLines) {
+          truncated = true;
+          break;
+        }
+      }
+    }
+    if (truncated) break;
+    if (current && lines.length < maxLines) lines.push(current);
+    else if (current) truncated = true;
+    if (lines.length >= maxLines && paragraph !== paragraphs.at(-1)) {
+      truncated = true;
+      break;
     }
   }
-  if (current && lines.length < maxLines) lines.push(current);
-  if (words.join(' ').length > lines.join(' ').length && lines.length) lines[lines.length - 1] = `${lines[lines.length - 1]!.replace(/[.…]+$/, '')}…`;
+  if (truncated && lines.length) lines[lines.length - 1] = `${lines[lines.length - 1]!.replace(/[.…]+$/, '')}…`;
   return lines.length ? lines : [''];
 }
 
@@ -121,6 +180,56 @@ async function makePdf(images: Uint8Array[], width: number, height: number) {
     page.drawImage(png, { x: 0, y: 0, width, height });
   }
   return new Uint8Array(await pdf.save());
+}
+
+async function makeVideo(frames: Uint8Array[]) {
+  const executable = ffmpegPath && existsSync(ffmpegPath) ? ffmpegPath : (process.env.FFMPEG_PATH || 'ffmpeg');
+  if (frames.length === 0) throw new Error('Video fallback rejected: no visual frames were rendered.');
+  const dir = await mkdtemp(path.join(tmpdir(), 'ghaith-video-'));
+  try {
+    const framePaths: string[] = [];
+    for (let index = 0; index < frames.length; index += 1) {
+      const file = path.join(dir, `scene-${index + 1}.png`);
+      await writeFile(file, frames[index]!);
+      framePaths.push(file);
+    }
+    const out = path.join(dir, 'video.mp4');
+    const args: string[] = ['-y'];
+    for (const frame of framePaths) args.push('-loop', '1', '-t', '4', '-i', frame);
+    const filters = framePaths.map((_, index) => `[${index}:v]fps=25,format=yuv420p[v${index}]`).join(';');
+    const concat = framePaths.map((_, index) => `[v${index}]`).join('') + `concat=n=${framePaths.length}:v=1:a=0[outv]`;
+    args.push(
+      '-filter_complex', `${filters};${concat}`,
+      '-map', '[outv]',
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      out,
+    );
+    await execFileAsync(executable, args, { timeout: 120_000, maxBuffer: 4 * 1024 * 1024 });
+    const video = await readFile(out);
+    if (video.length < 10_000) throw new Error('Video fallback rejected: the encoded MP4 is unexpectedly small.');
+    return new Uint8Array(video);
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+function safeVisualText(value: string) {
+  const normalized = String(value ?? '').normalize('NFKC').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ' ').trim();
+  if (/[\uFFFD\u25A0-\u25A2\u25A4-\u25A9\u25AB\u25AD-\u25B1]/u.test(normalized)) {
+    throw new Error('Visual asset rejected: the source text contains replacement or missing-glyph boxes.');
+  }
+  return normalized;
+}
+
+function containsArabic(value: string) {
+  return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/u.test(value);
+}
+
+function transparentLayer(width: number, height: number) {
+  return sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
 }
 
 function escapeXml(value: string) {

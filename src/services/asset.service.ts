@@ -120,8 +120,10 @@ export class AssetService {
     if (remotionFiles.length) succeededKinds.add('video');
     const missingKinds = requestedKinds.filter((kind) => !succeededKinds.has(kind));
     const fallbackFiles: string[] = [];
+    const fallbackUsedFor: CanvaAssetKind[] = [];
+    let fallbackVideoError: string | undefined;
 
-    if (missingKinds.some((kind) => kind !== 'video')) {
+    if (missingKinds.length > 0) {
       const fallback = await renderFallbackMedia(content);
 
       if (missingKinds.includes('social') && fallback.social) {
@@ -130,6 +132,7 @@ export class AssetService {
           fallbackFiles.push(file.webViewLink);
           newDriveUrls.push(file.webViewLink);
           newAssets.push({ kind: 'image', url: file.webViewLink, provider: 'google-drive', providerId: file.id });
+          fallbackUsedFor.push('social');
         }
       }
 
@@ -155,8 +158,21 @@ export class AssetService {
             newAssets.push({ kind: 'carousel', url: pdf.webViewLink, provider: 'google-drive', providerId: pdf.id });
           }
         }
+        if (fallback.carouselSlides.length > 0) fallbackUsedFor.push('carousel');
       }
 
+      if (missingKinds.includes('video')) {
+        fallbackVideoError = fallback.videoError;
+        if (fallback.video) {
+          const file = await this.drive.upsertBytes(`${content.id}-video-fallback.mp4`, fallback.video, 'video/mp4', reportFolderId);
+          if (file?.webViewLink) {
+            fallbackFiles.push(file.webViewLink);
+            newDriveUrls.push(file.webViewLink);
+            newAssets.push({ kind: 'video', url: file.webViewLink, provider: 'google-drive', providerId: file.id, format: '9:16', width: 1080, height: 1920, platforms: ['instagram', 'tiktok', 'youtube'] });
+            fallbackUsedFor.push('video');
+          }
+        }
+      }
     }
 
     const manifest = JSON.stringify({
@@ -169,8 +185,9 @@ export class AssetService {
       canvaErrors: designErrors,
       remotion: { attempted: requestedKinds.includes('video'), files: remotionFiles, errors: remotionErrors },
       missingKinds,
-      fallbackUsedFor: missingKinds.filter((kind) => kind !== 'video'),
+      fallbackUsedFor,
       fallbackFiles,
+      fallbackVideoError,
       optionalAvatarSource: avatarVideo,
       generatedAt: new Date().toISOString(),
     }, null, 2);
@@ -186,6 +203,83 @@ export class AssetService {
       assets: dedupeAssets([...content.assets, ...newAssets]),
       googleDriveUrls: [...new Set([...content.googleDriveUrls, ...newDriveUrls])],
     });
+  }
+
+  async repairFallbackAssets(contentId: string) {
+    const content = await this.store.getContent(contentId);
+    const reportFolderId = await this.reportFolderId(content);
+    const fallback = await renderFallbackMedia(content);
+    const newAssets: AssetRef[] = [];
+    const newDriveUrls: string[] = [];
+    const repairedFiles: Array<{ kind: CanvaAssetKind; name: string; url: string }> = [];
+
+    if (fallback.social) {
+      const name = `${content.id}-social.png`;
+      const file = await this.drive.upsertBytes(name, fallback.social, 'image/png', reportFolderId);
+      if (file?.webViewLink) {
+        repairedFiles.push({ kind: 'social', name, url: file.webViewLink });
+        newDriveUrls.push(file.webViewLink);
+        newAssets.push({ kind: 'image', url: file.webViewLink, provider: 'google-drive', providerId: file.id });
+      }
+    }
+
+    for (let index = 0; index < fallback.carouselSlides.length; index += 1) {
+      const name = `${content.id}-carousel-${String(index + 1).padStart(2, '0')}.png`;
+      const file = await this.drive.upsertBytes(name, fallback.carouselSlides[index]!, 'image/png', reportFolderId);
+      if (file?.webViewLink) {
+        repairedFiles.push({ kind: 'carousel', name, url: file.webViewLink });
+        newDriveUrls.push(file.webViewLink);
+        newAssets.push({ kind: 'carousel', url: file.webViewLink, provider: 'google-drive', providerId: file.id });
+      }
+    }
+    if (fallback.carouselPdf) {
+      const name = `${content.id}-carousel.pdf`;
+      const file = await this.drive.upsertBytes(name, fallback.carouselPdf, 'application/pdf', reportFolderId);
+      if (file?.webViewLink) {
+        repairedFiles.push({ kind: 'carousel', name, url: file.webViewLink });
+        newDriveUrls.push(file.webViewLink);
+        newAssets.push({ kind: 'carousel', url: file.webViewLink, provider: 'google-drive', providerId: file.id });
+      }
+    }
+
+    if (fallback.video) {
+      const name = `${content.id}-video-fallback.mp4`;
+      const file = await this.drive.upsertBytes(name, fallback.video, 'video/mp4', reportFolderId);
+      if (file?.webViewLink) {
+        repairedFiles.push({ kind: 'video', name, url: file.webViewLink });
+        newDriveUrls.push(file.webViewLink);
+        newAssets.push({ kind: 'video', url: file.webViewLink, provider: 'google-drive', providerId: file.id, format: '9:16', width: 1080, height: 1920, platforms: ['instagram', 'tiktok', 'youtube'] });
+      }
+    }
+
+    const repairedKinds = new Set(repairedFiles.map((file) => file.kind));
+    const missingKinds = (['social', 'carousel', 'video'] as CanvaAssetKind[]).filter((kind) => !repairedKinds.has(kind));
+    const complete = missingKinds.length === 0;
+    const manifest = JSON.stringify({
+      contentId,
+      title: content.title,
+      sourceReportId: content.sourceReportId,
+      reportFolderId,
+      renderer: 'sharp-pango-dejavu-sans-and-ffmpeg',
+      repairedFiles,
+      complete,
+      missingKinds,
+      videoError: fallback.videoError,
+      generatedAt: new Date().toISOString(),
+    }, null, 2);
+    const manifestFile = await this.drive.upsertText(
+      `${content.id}-asset-repair-manifest.json`,
+      manifest,
+      'application/json',
+      reportFolderId,
+    );
+    if (manifestFile?.webViewLink) newDriveUrls.push(manifestFile.webViewLink);
+
+    const updated = await this.store.updateContent(contentId, {
+      assets: dedupeAssets([...content.assets, ...newAssets]),
+      googleDriveUrls: [...new Set([...content.googleDriveUrls, ...newDriveUrls])],
+    });
+    return { content: updated, repairedFiles, complete, missingKinds, videoError: fallback.videoError };
   }
 
   async ingestHeyGenVideo(input: { contentId: string; videoUrl: string; videoId?: string }) {

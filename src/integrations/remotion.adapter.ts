@@ -63,9 +63,11 @@ export class RemotionAdapter {
     if (!this.enabled) return base;
     let sandbox: RemotionSandbox | undefined;
     try {
-      const { createSandbox } = await loadRemotionVercel();
+      const { addBundleToSandbox, createSandbox } = await loadRemotionVercel();
       sandbox = await createSandbox({ timeoutInMilliseconds: 90_000 });
-      return { ...base, ok: true, message: 'Vercel Sandbox created successfully.' };
+      const bundleDir = path.join(__dirname, '..', '..', 'remotion-bundle');
+      await prepareSandboxBundle(sandbox, bundleDir, addBundleToSandbox);
+      return { ...base, ok: true, message: 'Vercel Sandbox created and the Remotion bundle loaded successfully.' };
     } catch (error) {
       return { ...base, ok: false, message: error instanceof Error ? error.message : String(error) };
     } finally {
@@ -81,7 +83,7 @@ export class RemotionAdapter {
     const videos: RemotionRenderedVideo[] = [];
     const errors: RemotionRenderBatch['errors'] = [];
     try {
-      await addBundleToSandbox({ sandbox, bundleDir });
+      await prepareSandboxBundle(sandbox, bundleDir, addBundleToSandbox);
       for (const format of selectRemotionFormats(content)) {
         const preset = FORMAT_PRESETS[format];
         try {
@@ -119,6 +121,17 @@ export class RemotionAdapter {
     if (!result.videos.length) throw new Error(result.errors.map((item) => `${item.format}: ${item.message}`).join('; ') || 'Remotion did not render a video.');
     return result.videos[0]!.bytes;
   }
+}
+
+async function prepareSandboxBundle(
+  sandbox: RemotionSandbox,
+  bundleDir: string,
+  addBundleToSandbox: RemotionVercelModule['addBundleToSandbox'],
+) {
+  // @remotion/vercel 4.0.506 creates nested paths below this directory but
+  // does not create the root itself. Vercel Sandbox mkdir is not recursive.
+  await sandbox.mkDir('remotion-bundle');
+  await addBundleToSandbox({ sandbox, bundleDir });
 }
 
 export function selectRemotionFormats(content: ContentItem): RemotionFormat[] {
