@@ -401,7 +401,12 @@ function isStaticPath(pathname: string) { return Object.prototype.hasOwnProperty
 async function sendStatic(res: ServerResponse, pathname: string) {
   const item = staticFiles[pathname]!;
   const content = await readFile(path.join(__dirname, 'web', item.file));
-  res.writeHead(200, { 'Content-Type': item.type, 'Cache-Control': pathname === '/' ? 'no-cache' : 'public, max-age=3600' });
+  const mustRevalidate = ['/', '/sw.js', '/app.js', '/styles.css', '/linkify.js', '/notifications.js'].includes(pathname);
+  res.writeHead(200, {
+    'Content-Type': item.type,
+    'Cache-Control': mustRevalidate ? 'no-cache, must-revalidate' : 'public, max-age=3600',
+    ...(pathname === '/sw.js' ? { 'Service-Worker-Allowed': '/' } : {}),
+  });
   res.end(content);
 }
 

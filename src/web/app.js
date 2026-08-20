@@ -79,6 +79,17 @@ qs('#archiveAllReportsBtn').addEventListener('click',archiveAllReports);
 qs('#copyEnvBtn').addEventListener('click',async()=>{const text=['OPENAI_API_KEY','CLICKUP_API_TOKEN','CLICKUP_LIST_ID','PUBLISH_MODE','MAKE_WEBHOOK_URL','MAKE_WEBHOOK_SECRET','GOOGLE_DRIVE_ACCESS_TOKEN','GOOGLE_DRIVE_FOLDER_ID','SEMRUSH_API_URL','SEMRUSH_API_KEY','CANVA_AUTOMATION_WEBHOOK_URL','HEYGEN_AUTOMATION_WEBHOOK_URL','SUPPORTED_PLATFORMS'].join('\n');await navigator.clipboard.writeText(text);toast('تم نسخ أسماء الإعدادات','success')});
 
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();state.deferredInstall=e;qs('#installBtn').hidden=false});qs('#installBtn').addEventListener('click',async()=>{if(!state.deferredInstall)return;state.deferredInstall.prompt();await state.deferredInstall.userChoice;state.deferredInstall=null;qs('#installBtn').hidden=true});
-if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+if('serviceWorker'in navigator)window.addEventListener('load',async()=>{
+  let reloading=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(reloading||!navigator.serviceWorker.controller)return;
+    reloading=true;
+    location.reload();
+  });
+  try{
+    const registration=await navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'});
+    await registration.update();
+  }catch{}
+});
 async function boot(){await loadAll();const requested=new URLSearchParams(location.search).get('view');switchView(validViews.includes(requested)?requested:'dashboard',{record:false,replace:true})}
 setInterval(()=>loadAll(false),30000);boot();
