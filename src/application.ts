@@ -76,6 +76,12 @@ export function createApp() {
             ClickUp: integrations.clickup.enabled,
             Make: integrations.make.enabled,
             'Google Drive': driveStatus.connected,
+            'Google Trends': {
+              enabled: false,
+              available: true,
+              mode: 'manual',
+              url: 'https://trends.google.com/explore',
+            },
             Canva: integrations.canva.enabled,
             HeyGen: integrations.heygen.enabled,
             Remotion: integrations.remotion.enabled,
