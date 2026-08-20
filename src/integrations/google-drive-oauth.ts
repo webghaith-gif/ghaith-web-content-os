@@ -67,6 +67,10 @@ export class GoogleDriveOAuthManager {
     return url.toString();
   }
 
+  async handleOAuthCallback(code: string, state: string): Promise<void> {
+    return this.handleCallback(code, state);
+  }
+
   async handleCallback(code: string, state: string): Promise<void> {
     this.requireClientCredentials();
     const pending = await this.store.getGoogleDriveOAuthPending();
