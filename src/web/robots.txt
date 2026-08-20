@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /*?*
+
+Sitemap: https://ghaith-web-content-os.vercel.app/sitemap.xml
