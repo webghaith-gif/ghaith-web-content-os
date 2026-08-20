@@ -39,6 +39,17 @@ export interface Opportunity {
   title: string;
   rationale: string;
   score: OpportunityScore;
+  semrush?: {
+    keyword: string;
+    country: string;
+    searchVolume?: number;
+    keywordDifficulty?: number;
+    competitiveDensity?: number;
+    cpcUsdCents?: number;
+    intents?: string[];
+    trends?: number[];
+    fetchedAt: string;
+  };
   createdAt: string;
 }
 

@@ -182,6 +182,29 @@ export class AssetService {
     });
   }
 
+  async ingestHeyGenVideo(input: { contentId: string; videoUrl: string; videoId?: string }) {
+    const content = await this.store.getContent(input.contentId);
+    const url = new URL(input.videoUrl);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('HeyGen video URL must use HTTP or HTTPS.');
+    const reportFolderId = await this.reportFolderId(content);
+    const file = await this.drive.uploadFromUrl(
+      `${content.id}-video-heygen.mp4`,
+      input.videoUrl,
+      'video/mp4',
+      reportFolderId,
+    );
+    if (!file?.webViewLink) throw new Error('Google Drive did not return a link for the HeyGen video.');
+    return this.store.updateContent(content.id, {
+      assets: dedupeAssets([...content.assets, {
+        kind: 'video',
+        url: file.webViewLink,
+        provider: 'heygen',
+        providerId: input.videoId || file.id,
+      }]),
+      googleDriveUrls: [...new Set([...content.googleDriveUrls, file.webViewLink])],
+    });
+  }
+
   private async reportFolderId(content: ContentItem): Promise<string | undefined> {
     if (!content.sourceReportId) return this.drive.ensureExportFolder();
     const report = await this.store.getReport(content.sourceReportId);

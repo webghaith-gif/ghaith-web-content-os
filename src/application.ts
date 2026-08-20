@@ -247,6 +247,27 @@ export function createApp() {
         const probe = await integrations.heygen.testConnection();
         return sendJson(res, probe.ok ? 200 : 503, probe);
       }
+      if (url.pathname === '/api/webhooks/heygen' && method === 'POST') {
+        if (!env.HEYGEN_CALLBACK_SECRET) throw new AppError('HeyGen callback is not configured.', 503, 'INTEGRATION_DISABLED');
+        if (requestHeader(req, 'x-ghaith-webhook-secret') !== env.HEYGEN_CALLBACK_SECRET) {
+          throw new AppError('Invalid HeyGen callback secret.', 401, 'UNAUTHORIZED');
+        }
+        const body = await readJson(req);
+        requireString(body.contentId, 'contentId');
+        requireString(body.videoUrl, 'videoUrl');
+        const content = await assets.ingestHeyGenVideo({
+          contentId: body.contentId,
+          videoUrl: body.videoUrl,
+          videoId: optionalString(body.videoId),
+        });
+        await safeNotify({
+          title: 'فيديو HeyGen النهائي جاهز على Google Drive 🎬',
+          body: content.title,
+          url: '/?view=content',
+          tag: `heygen-video-${content.id}`,
+        });
+        return sendJson(res, 200, { ok: true, content });
+      }
       if (url.pathname === '/api/integrations/remotion/test' && method === 'GET') {
         const probe = await integrations.remotion.testConnection();
         return sendJson(res, probe.ok ? 200 : 503, probe);

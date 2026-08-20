@@ -195,7 +195,11 @@ Canva remains the image and carousel factory. Remotion is the primary vertical-v
 
 HeyGen presenter videos are optional and are routed through `HEYGEN_AUTOMATION_WEBHOOK_URL`, normally a Make scenario using the current HeyGen connector. The app intentionally does not call legacy HeyGen v1/v2 HTTP generation endpoints.
 
+The Make scenario returns immediately, then calls the signed `/api/webhooks/heygen` callback when the final MP4 exists. Only that final URL is imported into the report's Drive folder. See `docs/MAKE_HEYGEN_CONTRACT.md`.
+
 ### Semrush
+
+When a v4 API key is configured, the highest preliminary opportunities are enriched with search volume, keyword difficulty, intent, CPC and trend signals before their final score is saved. `SEMRUSH_ENRICHMENT_LIMIT` defaults to 3, and the current v4 endpoint consumes API units per request.
 
 `SEMRUSH_API_URL` + `SEMRUSH_API_KEY` provide an optional enrichment bridge. Keep the endpoint configurable so plan/API changes do not affect the Core.
 
