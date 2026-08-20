@@ -1,7 +1,16 @@
 import path from 'node:path';
-import { addBundleToSandbox, createSandbox, renderMediaOnVercel } from '@remotion/vercel';
 import { env } from '../config/env';
 import type { ContentItem, VideoSceneContent } from '../core/types';
+
+type RemotionVercelModule = typeof import('@remotion/vercel');
+type RemotionSandbox = Awaited<ReturnType<RemotionVercelModule['createSandbox']>>;
+
+let remotionVercelModule: Promise<RemotionVercelModule> | undefined;
+
+function loadRemotionVercel() {
+  remotionVercelModule ??= import('@remotion/vercel');
+  return remotionVercelModule;
+}
 
 export interface RemotionConnectionProbe {
   ok: boolean;
@@ -27,8 +36,9 @@ export class RemotionAdapter {
   async testConnection(): Promise<RemotionConnectionProbe> {
     const base = this.configuration();
     if (!this.enabled) return base;
-    let sandbox: Awaited<ReturnType<typeof createSandbox>> | undefined;
+    let sandbox: RemotionSandbox | undefined;
     try {
+      const { createSandbox } = await loadRemotionVercel();
       sandbox = await createSandbox({ timeoutInMilliseconds: 90_000 });
       return { ...base, ok: true, message: 'Vercel Sandbox created successfully.' };
     } catch (error) {
@@ -40,6 +50,7 @@ export class RemotionAdapter {
 
   async renderVideo(content: ContentItem): Promise<Uint8Array> {
     if (!this.enabled) throw new Error('Remotion is not enabled in this runtime.');
+    const { addBundleToSandbox, createSandbox, renderMediaOnVercel } = await loadRemotionVercel();
     const bundleDir = path.join(__dirname, '..', '..', 'remotion-bundle');
     const sandbox = await createSandbox({ timeoutInMilliseconds: 12 * 60_000, resources: { vcpus: 4 } });
     try {
