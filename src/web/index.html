@@ -156,6 +156,41 @@
 <script src="/app.js?v=8" defer></script>
 <script src="/linkify.js?v=8" defer></script>
 <script src="/notifications.js?v=8" defer></script>
+<script>
+(() => {
+  let googleConnected = false;
+  function injectSearchConsole() {
+    const grid = document.getElementById('integrationGrid');
+    if (grid && !grid.querySelector('[data-search-console-card]')) {
+      const card = document.createElement('article');
+      card.className = 'integration-card';
+      card.setAttribute('data-search-console-card', '');
+      card.innerHTML = `<div class="top"><h3>Google Search Console</h3><span class="${googleConnected ? 'pill-on' : 'pill-off'}">${googleConnected ? 'متصل' : 'يحتاج إعداد'}</span></div><p>قراءة أداء البحث والفهرسة وبيانات ظهور الموقع في Google.</p>`;
+      grid.appendChild(card);
+    }
+    const mini = document.getElementById('integrationMini');
+    if (mini && !mini.querySelector('[data-search-console-mini]')) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.setAttribute('data-search-console-mini', '');
+      row.innerHTML = `<span>Google Search Console</span><b class="${googleConnected ? 'pill-on' : 'pill-off'}">${googleConnected ? 'جاهز' : 'غير مضبوط'}</b>`;
+      mini.appendChild(row);
+    }
+  }
+  window.addEventListener('DOMContentLoaded', async () => {
+    try {
+      const res = await fetch('/api/integrations/google-drive/status', { cache: 'no-store' });
+      const data = await res.json();
+      googleConnected = Boolean(data && data.connected);
+    } catch {}
+    injectSearchConsole();
+    const grid = document.getElementById('integrationGrid');
+    const mini = document.getElementById('integrationMini');
+    if (grid) new MutationObserver(injectSearchConsole).observe(grid, { childList: true });
+    if (mini) new MutationObserver(injectSearchConsole).observe(mini, { childList: true });
+  });
+})();
+</script>
 <!-- deployment retry marker: 2026-08-19 -->
 </body>
 </html>
