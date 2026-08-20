@@ -1,4 +1,4 @@
-import type { AssetRef, ContentItem } from '../core/types';
+import type { AssetRef, ContentItem, PlatformContentVariant } from '../core/types';
 import { AppError } from '../core/errors';
 
 export interface ClickUpWatchPlan {
@@ -51,11 +51,12 @@ export function buildClickUpWatchPlans(content: ContentItem): ClickUpWatchPlan[]
       throw new AppError(`${platform} requires platform text before READY.`, 409, 'CLICKUP_PREFLIGHT_MISSING_TEXT');
     }
 
+    const platformTitle = content.package.platformCopies?.[platform]?.title?.trim();
     return {
       platform,
-      finalName: `${contract.prefix} ${content.title}`,
+      finalName: `${contract.prefix} ${platformTitle || content.title}`,
       // Make currently routes by [FB]/[IG]/[TT]/[PIN]/[YT], so a HOLD task must never contain those prefixes.
-      holdName: `[GW-HOLD] ${platform.toUpperCase()} — ${content.title}`,
+      holdName: `[GW-HOLD] ${platform.toUpperCase()} — ${platformTitle || content.title}`,
       description,
       asset,
       fileName: assetFileName(asset, contract.mediaKind, platform),
@@ -65,8 +66,10 @@ export function buildClickUpWatchPlans(content: ContentItem): ClickUpWatchPlan[]
 
 function platformDescription(content: ContentItem, platform: string): string {
   const pkg = content.package;
-  let base: string;
+  const variant = pkg.platformCopies?.[platform];
+  if (variant) return variantDescription(variant, platform, pkg.cta);
 
+  let base: string;
   switch (platform) {
     case 'youtube':
       base = pkg.description ?? pkg.caption ?? pkg.script ?? content.title;
@@ -86,6 +89,21 @@ function platformDescription(content: ContentItem, platform: string): string {
 
   const cta = pkg.cta?.trim();
   if (cta && !base.includes(cta)) return `${base.trim()}\n\n${cta}`;
+  return base.trim();
+}
+
+function variantDescription(variant: PlatformContentVariant, platform: string, fallbackCta?: string): string {
+  let base = platform === 'youtube' || platform === 'pinterest'
+    ? variant.description ?? variant.caption ?? variant.hook ?? ''
+    : variant.caption ?? variant.description ?? variant.hook ?? '';
+  const cta = variant.cta?.trim() || fallbackCta?.trim();
+  if (cta && !base.includes(cta)) base = `${base.trim()}\n\n${cta}`;
+  const tags = (variant.hashtags ?? [])
+    .map((tag) => tag.trim().replace(/^#/, ''))
+    .filter(Boolean)
+    .map((tag) => `#${tag.replace(/\s+/g, '_')}`);
+  if (tags.length > 0) base = `${base.trim()}\n\n${tags.join(' ')}`;
+  if (platform === 'pinterest') return base.slice(0, 800).trim();
   return base.trim();
 }
 
