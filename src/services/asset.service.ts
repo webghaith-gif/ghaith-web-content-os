@@ -2,6 +2,7 @@ import { Store } from '../repositories/store';
 import { CanvaAdapter, type CanvaAssetKind, type CanvaDesignResult } from '../integrations/canva.adapter';
 import { HeyGenAdapter } from '../integrations/heygen.adapter';
 import { GoogleDriveAdapter } from '../integrations/google-drive.adapter';
+import { RemotionAdapter } from '../integrations/remotion.adapter';
 import { renderFallbackMedia } from './fallback-media-renderer';
 import type { AssetRef, ContentItem } from '../core/types';
 
@@ -9,16 +10,19 @@ export class AssetService {
   private readonly canva: CanvaAdapter;
   private readonly heygen: HeyGenAdapter;
   private readonly drive: GoogleDriveAdapter;
+  private readonly remotion: RemotionAdapter;
 
   constructor(
     private readonly store: Store,
     canva?: CanvaAdapter,
     heygen?: HeyGenAdapter,
     drive?: GoogleDriveAdapter,
+    remotion?: RemotionAdapter,
   ) {
     this.canva = canva ?? new CanvaAdapter(store);
     this.heygen = heygen ?? new HeyGenAdapter();
     this.drive = drive ?? new GoogleDriveAdapter(store);
+    this.remotion = remotion ?? new RemotionAdapter();
   }
 
   async requestAssets(contentId: string) {
@@ -36,9 +40,10 @@ export class AssetService {
       : undefined;
 
     const requestedKinds = desiredCanvaKinds(content);
+    const canvaKinds = requestedKinds.filter((kind) => kind !== 'video');
     const designs: CanvaDesignResult[] = [];
     const designErrors: Array<{ kind: CanvaAssetKind; message: string }> = [];
-    for (const assetKind of requestedKinds) {
+    for (const assetKind of canvaKinds) {
       try {
         const result = await this.canva.requestDesign({
           assetKind,
@@ -90,11 +95,27 @@ export class AssetService {
       }
     }
 
-    const succeededKinds = new Set(designs.map((design) => design.kind));
+    let remotionFile: string | undefined;
+    let remotionError: string | undefined;
+    if (requestedKinds.includes('video')) {
+      try {
+        const video = await this.remotion.renderVideo(content);
+        const file = await this.drive.upsertBytes(`${content.id}-video-remotion.mp4`, video, 'video/mp4', reportFolderId);
+        if (!file?.webViewLink) throw new Error('Google Drive did not return a link for the rendered video.');
+        remotionFile = file.webViewLink;
+        newDriveUrls.push(file.webViewLink);
+        newAssets.push({ kind: 'video', url: file.webViewLink, provider: 'remotion', providerId: file.id });
+      } catch (error) {
+        remotionError = error instanceof Error ? error.message : String(error);
+      }
+    }
+
+    const succeededKinds = new Set<CanvaAssetKind>(designs.map((design) => design.kind));
+    if (remotionFile) succeededKinds.add('video');
     const missingKinds = requestedKinds.filter((kind) => !succeededKinds.has(kind));
     const fallbackFiles: string[] = [];
 
-    if (missingKinds.length > 0) {
+    if (missingKinds.some((kind) => kind !== 'video')) {
       const fallback = await renderFallbackMedia(content);
 
       if (missingKinds.includes('social') && fallback.social) {
@@ -130,14 +151,6 @@ export class AssetService {
         }
       }
 
-      if (missingKinds.includes('video') && fallback.video) {
-        const file = await this.drive.upsertBytes(`${content.id}-video-fallback.mp4`, fallback.video, 'video/mp4', reportFolderId);
-        if (file?.webViewLink) {
-          fallbackFiles.push(file.webViewLink);
-          newDriveUrls.push(file.webViewLink);
-          newAssets.push({ kind: 'video', url: file.webViewLink, provider: 'google-drive', providerId: file.id });
-        }
-      }
     }
 
     const manifest = JSON.stringify({
@@ -148,7 +161,9 @@ export class AssetService {
       requestedKinds,
       canvaDesigns: designs,
       canvaErrors: designErrors,
-      fallbackUsedFor: missingKinds,
+      remotion: { attempted: requestedKinds.includes('video'), file: remotionFile, error: remotionError },
+      missingKinds,
+      fallbackUsedFor: missingKinds.filter((kind) => kind !== 'video'),
       fallbackFiles,
       optionalAvatarSource: avatarVideo,
       generatedAt: new Date().toISOString(),
@@ -164,6 +179,29 @@ export class AssetService {
     return this.store.updateContent(contentId, {
       assets: dedupeAssets([...content.assets, ...newAssets]),
       googleDriveUrls: [...new Set([...content.googleDriveUrls, ...newDriveUrls])],
+    });
+  }
+
+  async ingestHeyGenVideo(input: { contentId: string; videoUrl: string; videoId?: string }) {
+    const content = await this.store.getContent(input.contentId);
+    const url = new URL(input.videoUrl);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('HeyGen video URL must use HTTP or HTTPS.');
+    const reportFolderId = await this.reportFolderId(content);
+    const file = await this.drive.uploadFromUrl(
+      `${content.id}-video-heygen.mp4`,
+      input.videoUrl,
+      'video/mp4',
+      reportFolderId,
+    );
+    if (!file?.webViewLink) throw new Error('Google Drive did not return a link for the HeyGen video.');
+    return this.store.updateContent(content.id, {
+      assets: dedupeAssets([...content.assets, {
+        kind: 'video',
+        url: file.webViewLink,
+        provider: 'heygen',
+        providerId: input.videoId || file.id,
+      }]),
+      googleDriveUrls: [...new Set([...content.googleDriveUrls, file.webViewLink])],
     });
   }
 

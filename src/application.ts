@@ -21,6 +21,7 @@ import { GoogleDriveAdapter } from './integrations/google-drive.adapter';
 import { SemrushAdapter } from './integrations/semrush.adapter';
 import { CanvaAdapter } from './integrations/canva.adapter';
 import { HeyGenAdapter } from './integrations/heygen.adapter';
+import { RemotionAdapter } from './integrations/remotion.adapter';
 import type { PublishResult } from './core/types';
 
 export function createApp() {
@@ -43,6 +44,7 @@ export function createApp() {
     semrush: new SemrushAdapter(),
     canva: new CanvaAdapter(store),
     heygen: new HeyGenAdapter(),
+    remotion: new RemotionAdapter(),
   };
 
   const safeNotify = async (notification: AppNotification) => {
@@ -77,6 +79,7 @@ export function createApp() {
             Semrush: integrations.semrush.enabled,
             Canva: integrations.canva.enabled,
             HeyGen: integrations.heygen.enabled,
+            Remotion: integrations.remotion.enabled,
           },
         });
       }
@@ -99,7 +102,8 @@ export function createApp() {
           Notifications: notificationStatus,
           Semrush: integrations.semrush.configuration(),
           Canva: { enabled: integrations.canva.enabled, mode: integrations.canva.mode, ...canvaStatus },
-          HeyGen: { enabled: integrations.heygen.enabled, mode: integrations.heygen.mode, avatarConfigured: Boolean(env.HEYGEN_AVATAR_ID), voiceConfigured: Boolean(env.HEYGEN_VOICE_ID) },
+          HeyGen: { enabled: integrations.heygen.enabled, mode: integrations.heygen.mode, route: 'Make/HeyGen connector webhook' },
+          Remotion: integrations.remotion.configuration(),
         });
       }
 
@@ -241,6 +245,31 @@ export function createApp() {
       }
       if (url.pathname === '/api/integrations/heygen/test' && method === 'GET') {
         const probe = await integrations.heygen.testConnection();
+        return sendJson(res, probe.ok ? 200 : 503, probe);
+      }
+      if (url.pathname === '/api/webhooks/heygen' && method === 'POST') {
+        if (!env.HEYGEN_CALLBACK_SECRET) throw new AppError('HeyGen callback is not configured.', 503, 'INTEGRATION_DISABLED');
+        if (requestHeader(req, 'x-ghaith-webhook-secret') !== env.HEYGEN_CALLBACK_SECRET) {
+          throw new AppError('Invalid HeyGen callback secret.', 401, 'UNAUTHORIZED');
+        }
+        const body = await readJson(req);
+        requireString(body.contentId, 'contentId');
+        requireString(body.videoUrl, 'videoUrl');
+        const content = await assets.ingestHeyGenVideo({
+          contentId: body.contentId,
+          videoUrl: body.videoUrl,
+          videoId: optionalString(body.videoId),
+        });
+        await safeNotify({
+          title: 'فيديو HeyGen النهائي جاهز على Google Drive 🎬',
+          body: content.title,
+          url: '/?view=content',
+          tag: `heygen-video-${content.id}`,
+        });
+        return sendJson(res, 200, { ok: true, content });
+      }
+      if (url.pathname === '/api/integrations/remotion/test' && method === 'GET') {
+        const probe = await integrations.remotion.testConnection();
         return sendJson(res, probe.ok ? 200 : 503, probe);
       }
 

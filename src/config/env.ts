@@ -90,6 +90,7 @@ export const env = {
   SEMRUSH_API_URL: optionalUrl('SEMRUSH_API_URL') ?? 'https://api.semrush.com/apis/v4/keywords/v1/metrics',
   SEMRUSH_API_KEY: process.env.SEMRUSH_API_KEY?.trim() || undefined,
   SEMRUSH_COUNTRY: (process.env.SEMRUSH_COUNTRY?.trim() || 'TN').toUpperCase(),
+  SEMRUSH_ENRICHMENT_LIMIT: Math.max(0, Math.min(10, numberEnv('SEMRUSH_ENRICHMENT_LIMIT', 3))),
 
   CANVA_ACCESS_TOKEN: process.env.CANVA_ACCESS_TOKEN?.trim() || undefined,
   CANVA_CLIENT_ID: process.env.CANVA_CLIENT_ID?.trim() || undefined,
@@ -115,6 +116,11 @@ export const env = {
   HEYGEN_VOICE_ID: process.env.HEYGEN_VOICE_ID?.trim() || undefined,
   HEYGEN_AVATAR_TYPE: (process.env.HEYGEN_AVATAR_TYPE?.trim() || 'photo_avatar').toLowerCase(),
   HEYGEN_AUTOMATION_WEBHOOK_URL: optionalUrl('HEYGEN_AUTOMATION_WEBHOOK_URL'),
+  HEYGEN_AUTOMATION_WEBHOOK_SECRET: process.env.HEYGEN_AUTOMATION_WEBHOOK_SECRET?.trim() || undefined,
+  HEYGEN_CALLBACK_SECRET: process.env.HEYGEN_CALLBACK_SECRET?.trim() || undefined,
+
+  // Remotion renders in an isolated Vercel Sandbox. It is on by default only inside Vercel.
+  REMOTION_ENABLED: booleanEnv('REMOTION_ENABLED', process.env.VERCEL === '1'),
 
   SUPPORTED_PLATFORMS: process.env.SUPPORTED_PLATFORMS?.trim() || 'facebook,instagram,tiktok,pinterest,youtube,x',
 };

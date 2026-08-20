@@ -1,0 +1,66 @@
+name: Verify Remotion Arabic video
+# This workflow renders media only; it never calls publishing endpoints.
+
+on:
+  pull_request:
+    paths:
+      - 'src/remotion/**'
+      - 'src/integrations/remotion.adapter.ts'
+      - 'src/services/asset.service.ts'
+      - 'scripts/copy-static.mjs'
+      - 'tests/remotion-sample-props.json'
+      - '.github/workflows/verify-remotion-video.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-and-inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Install Remotion browser
+        run: npx remotion browser ensure
+      - name: Render Arabic sample
+        run: >-
+          npx remotion render src/remotion/index.tsx GhaithVertical
+          ghaith-remotion-sample.mp4
+          --codec=h264
+          --concurrency=2
+          --timeout=120000
+          --props=tests/remotion-sample-props.json
+      - name: Install media inspector
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Validate media
+        run: |
+          test -s ghaith-remotion-sample.mp4
+          test "$(stat -c%s ghaith-remotion-sample.mp4)" -gt 100000
+          width="$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 ghaith-remotion-sample.mp4 | tr -cd '0-9')"
+          height="$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 ghaith-remotion-sample.mp4 | tr -cd '0-9')"
+          echo "Dimensions: ${width}x${height}"
+          test "$width" -eq 1080
+          test "$height" -eq 1920
+          ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 ghaith-remotion-sample.mp4
+          mkdir -p remotion-qa-frames
+          ffmpeg -y -ss 1 -i ghaith-remotion-sample.mp4 -frames:v 1 remotion-qa-frames/01-opening.png
+          ffmpeg -y -ss 7 -i ghaith-remotion-sample.mp4 -frames:v 1 remotion-qa-frames/02-middle.png
+          ffmpeg -y -ss 13.5 -i ghaith-remotion-sample.mp4 -frames:v 1 remotion-qa-frames/03-closing.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: remotion-arabic-visual-qa
+          path: |
+            ghaith-remotion-sample.mp4
+            remotion-qa-frames/*.png
+          if-no-files-found: error
+          retention-days: 7

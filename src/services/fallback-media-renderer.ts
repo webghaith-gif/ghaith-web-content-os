@@ -1,20 +1,12 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import sharp from 'sharp';
-import ffmpegPath from 'ffmpeg-static';
 import { PDFDocument } from 'pdf-lib';
 import type { ContentItem } from '../core/types';
-
-const execFileAsync = promisify(execFile);
 
 export interface RenderedMedia {
   social?: Uint8Array;
   carouselSlides: Uint8Array[];
   carouselPdf?: Uint8Array;
-  video?: Uint8Array;
 }
 
 export async function renderFallbackMedia(content: ContentItem): Promise<RenderedMedia> {
@@ -45,22 +37,7 @@ export async function renderFallbackMedia(content: ContentItem): Promise<Rendere
 
   const carouselPdf = await makePdf(carouselSlides, 1080, 1350);
 
-  const scenes = (content.package.videoScenes ?? []).slice(0, 3);
-  const videoFrames: Uint8Array[] = [];
-  for (let index = 0; index < 3; index += 1) {
-    const scene = scenes[index] ?? {};
-    videoFrames.push(await renderPng({
-      width: 1080,
-      height: 1920,
-      eyebrow: `GHAITH WEB  •  ${String(index + 1).padStart(2, '0')}/03`,
-      title: scene.title || content.title,
-      body: scene.body || content.package.script || content.package.caption || '',
-      footer: 'غيث ويب',
-    }));
-  }
-
-  const video = await makeVideo(videoFrames).catch(() => undefined);
-  return { social, carouselSlides, carouselPdf, video };
+  return { social, carouselSlides, carouselPdf };
 }
 
 async function renderPng(input: { width: number; height: number; eyebrow: string; title: string; body: string; footer: string }) {
@@ -144,29 +121,6 @@ async function makePdf(images: Uint8Array[], width: number, height: number) {
     page.drawImage(png, { x: 0, y: 0, width, height });
   }
   return new Uint8Array(await pdf.save());
-}
-
-async function makeVideo(frames: Uint8Array[]) {
-  if (!ffmpegPath) throw new Error('ffmpeg-static is unavailable.');
-  const dir = await mkdtemp(path.join(tmpdir(), 'ghaith-video-'));
-  try {
-    const framePaths: string[] = [];
-    for (let index = 0; index < frames.length; index += 1) {
-      const file = path.join(dir, `scene-${index + 1}.png`);
-      await writeFile(file, frames[index]!);
-      framePaths.push(file);
-    }
-    const out = path.join(dir, 'video.mp4');
-    const args: string[] = ['-y'];
-    for (const frame of framePaths) args.push('-loop', '1', '-t', '4', '-i', frame);
-    const filters = framePaths.map((_, i) => `[${i}:v]fps=25,format=yuv420p[v${i}]`).join(';');
-    const concat = framePaths.map((_, i) => `[v${i}]`).join('') + `concat=n=${framePaths.length}:v=1:a=0[outv]`;
-    args.push('-filter_complex', `${filters};${concat}`, '-map', '[outv]', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out);
-    await execFileAsync(ffmpegPath, args, { timeout: 120_000, maxBuffer: 4 * 1024 * 1024 });
-    return new Uint8Array(await readFile(out));
-  } finally {
-    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-  }
 }
 
 function escapeXml(value: string) {

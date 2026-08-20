@@ -39,6 +39,17 @@ export interface Opportunity {
   title: string;
   rationale: string;
   score: OpportunityScore;
+  semrush?: {
+    keyword: string;
+    country: string;
+    searchVolume?: number;
+    keywordDifficulty?: number;
+    competitiveDensity?: number;
+    cpcUsdCents?: number;
+    intents?: string[];
+    trends?: number[];
+    fetchedAt: string;
+  };
   createdAt: string;
 }
 
@@ -93,7 +104,7 @@ export interface ContentPackage {
 export interface AssetRef {
   kind: 'image' | 'carousel' | 'video' | 'document' | 'other';
   url: string;
-  provider?: 'google-drive' | 'canva' | 'heygen' | 'external';
+  provider?: 'google-drive' | 'canva' | 'heygen' | 'remotion' | 'external';
   providerId?: string;
 }
 
