@@ -90,7 +90,7 @@ const SceneCard: React.FC<{ scene: GhaithVideoScene; number: number }> = ({ scen
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = spring({ frame, fps, config: { damping: 17, stiffness: 130 } });
-  const exit = interpolate(frame, [98, 120], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.in(Easing.cubic) });
+  const exit = interpolate(frame, [80, 100], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.in(Easing.cubic) });
   const numberReveal = spring({ frame: frame - 10, fps, config: { damping: 14 } });
   return (
     <AbsoluteFill style={{ padding: '245px 78px 165px', direction: 'rtl', justifyContent: 'center', fontFamily: 'GhaithArabic', opacity: exit }}>
@@ -126,7 +126,7 @@ export const GhaithVerticalVideo: React.FC<GhaithVideoProps> = ({ title, hook, c
       <AnimatedBackdrop />
       <Sequence from={0} durationInFrames={90}><Opening hook={hook} title={title} /></Sequence>
       {normalized.map((scene, index) => (
-        <Sequence key={index} from={90 + index * 100} durationInFrames={120}>
+        <Sequence key={index} from={90 + index * 100} durationInFrames={100}>
           <SceneCard scene={scene} number={index + 1} />
         </Sequence>
       ))}
