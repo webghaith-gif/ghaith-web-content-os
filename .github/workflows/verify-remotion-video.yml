@@ -1,4 +1,5 @@
 name: Verify Remotion Arabic video
+# This workflow renders media only; it never calls publishing endpoints.
 
 on:
   pull_request:
