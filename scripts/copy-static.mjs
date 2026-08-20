@@ -8,3 +8,4 @@ for (const target of ['dist/src/web', 'public']) {
 
 await mkdir('dist/src/assets', { recursive: true });
 await cp('src/assets/DejaVuSans.ttf', 'dist/src/assets/DejaVuSans.ttf');
+await cp('src/assets/DejaVuSans.ttf', 'public/DejaVuSans.ttf');
