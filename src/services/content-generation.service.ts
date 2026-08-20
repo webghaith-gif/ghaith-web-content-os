@@ -3,10 +3,12 @@ import { OpenAIAdapter } from '../integrations/openai.adapter';
 import { GoogleDriveAdapter } from '../integrations/google-drive.adapter';
 import { ContentArchiveService } from './content-archive.service';
 import { NotificationService } from './notification.service';
+import { AssetService } from './asset.service';
 
 export class ContentGenerationService {
   private readonly archive: ContentArchiveService;
   private readonly notifications: NotificationService;
+  private readonly assets: AssetService;
 
   constructor(
     private readonly store: Store,
@@ -14,6 +16,7 @@ export class ContentGenerationService {
   ) {
     this.archive = new ContentArchiveService(store, new GoogleDriveAdapter(store));
     this.notifications = new NotificationService(store);
+    this.assets = new AssetService(store);
   }
 
   async createFromOpportunity(opportunityId: string, platforms: string[], oidcToken?: string) {
@@ -46,26 +49,34 @@ export class ContentGenerationService {
       status: 'IN_REVIEW',
     });
 
-    // Drive persistence is part of content creation, not a later manual step.
-    // If Drive is temporarily unavailable, the request fails so the caller can retry
-    // without creating a duplicate content item (Store.createContent is idempotent).
     const archived = await this.archive.archive(created.id);
 
-    // Server-side Web Push: no browser refresh or open app is required.
-    // The application route may emit the same content-review tag afterwards; browsers
-    // replace the previous notification instead of stacking duplicates.
+    let completed = archived.content;
     try {
+      completed = await this.assets.requestAssets(created.id);
+    } catch (error) {
+      console.warn('Automatic media generation failed after content archive', error);
+    }
+
+    try {
+      const latest = await this.store.getContent(created.id);
+      const imageCount = latest.assets.filter((asset) => asset.kind === 'image').length;
+      const carouselCount = latest.assets.filter((asset) => asset.kind === 'carousel').length;
+      const videoCount = latest.assets.filter((asset) => asset.kind === 'video').length;
       await this.notifications.send({
-        title: 'محتوى جديد حُفظ تلقائيًا في Google Drive ✅',
-        body: `${archived.content.title} — جاهز للمراجعة.`,
-        url: archived.file.webViewLink ?? archived.folderUrl,
-        tag: `content-review-${archived.content.id}`,
+        title: imageCount || carouselCount || videoCount
+          ? 'المحتوى وملفاته حُفظت تلقائيًا ✅'
+          : 'المحتوى حُفظ تلقائيًا في Google Drive ✅',
+        body: `${latest.title} — صور ${imageCount}، كاروسيل ${carouselCount}، فيديو ${videoCount}.`,
+        url: archived.folderUrl,
+        tag: `content-review-${latest.id}`,
       });
+      completed = latest;
     } catch (error) {
       console.warn('Immediate content push notification failed', error);
     }
 
-    return archived.content;
+    return completed;
   }
 
   private async generateWithAi(input: {
