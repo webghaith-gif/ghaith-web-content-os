@@ -12,6 +12,7 @@ import { PublishingOrchestrator } from './services/publishing-orchestrator';
 import { MetricsService } from './services/metrics.service';
 import { AssetService } from './services/asset.service';
 import { NotificationService, type AppNotification } from './services/notification.service';
+import { ReportArchiveService } from './services/report-archive.service';
 import { PlatformRegistry } from './platforms/registry';
 import { OpenAIAdapter } from './integrations/openai.adapter';
 import { ClickUpAdapter } from './integrations/clickup.adapter';
@@ -31,6 +32,7 @@ export function createApp() {
   const metrics = new MetricsService(store);
   const assets = new AssetService(store);
   const notifications = new NotificationService(store);
+  const reportArchive = new ReportArchiveService(store);
   const platforms = new PlatformRegistry();
 
   const integrations = {
@@ -246,7 +248,19 @@ export function createApp() {
       if (url.pathname === '/api/reports' && method === 'POST') {
         const body = await readJson(req);
         requireString(body.title, 'title'); requireString(body.body, 'body');
-        return sendJson(res, 201, await store.createReport({ title: body.title, body: body.body, source: optionalString(body.source) }));
+        let report = await store.createReport({ title: body.title, body: body.body, source: optionalString(body.source) });
+        report = await reportArchive.archive(report.id);
+        await safeNotify({
+          title: 'تقرير جديد وصل إلى Ghaith Web Content OS 📥',
+          body: report.title,
+          url: '/?view=reports',
+          tag: `report-${report.id}`,
+        });
+        return sendJson(res, 201, report);
+      }
+      if (url.pathname === '/api/reports/archive-pending' && method === 'POST') {
+        const requested = Number(url.searchParams.get('limit') ?? 5);
+        return sendJson(res, 200, await reportArchive.archivePending(Number.isFinite(requested) ? requested : 5));
       }
       if (url.pathname === '/api/opportunities' && method === 'GET') return sendJson(res, 200, await store.listOpportunities());
       if (url.pathname === '/api/content' && method === 'GET') return sendJson(res, 200, await store.listContents());
@@ -256,6 +270,9 @@ export function createApp() {
 
       let match = url.pathname.match(/^\/api\/reports\/([^/]+)\/opportunities$/);
       if (match && method === 'POST') return sendJson(res, 201, await intelligence.extractOpportunities(match[1]!, oidcToken));
+
+      match = url.pathname.match(/^\/api\/reports\/([^/]+)\/archive$/);
+      if (match && method === 'POST') return sendJson(res, 200, await reportArchive.archive(match[1]!));
 
       match = url.pathname.match(/^\/api\/opportunities\/([^/]+)\/content$/);
       if (match && method === 'POST') {

@@ -5,3 +5,6 @@ for (const target of ['dist/src/web', 'public']) {
   await mkdir(target, { recursive: true });
   await cp('src/web', target, { recursive: true });
 }
+
+await mkdir('dist/src/assets', { recursive: true });
+await cp('src/assets/DejaVuSans.ttf', 'dist/src/assets/DejaVuSans.ttf');

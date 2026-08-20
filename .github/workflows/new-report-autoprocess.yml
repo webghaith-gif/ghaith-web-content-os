@@ -31,6 +31,10 @@ jobs:
           opportunities=$(curl -fsS --max-time 60 "$base/api/opportunities")
           contents=$(curl -fsS --max-time 60 "$base/api/content")
 
+          # Keep every report mirrored in Drive. The endpoint is idempotent and processes
+          # a bounded batch so the workflow remains inside serverless time limits.
+          curl -fsS --max-time 300 -X POST "$base/api/reports/archive-pending?limit=10" | jq '{archived:(.archived|length),remaining}'
+
           # Historical Gmail summaries are handled by the slow backfill workflow.
           # This workflow prioritizes every normal/new report as soon as it appears.
           report_id=$(jq -nr \
@@ -89,4 +93,17 @@ jobs:
           jq '{id,title,status,sourceReportId,platforms,qualityReview:.package.qualityReview,platformCopies:(.package.platformCopies|keys)}' "$response_file"
           test "$(jq -r '.status' "$response_file")" = 'IN_REVIEW'
 
-          echo 'New report processed. Content is IN_REVIEW; nothing was published or sent READY.'
+          content_id=$(jq -r '.id' "$response_file")
+          assets_file=$(mktemp)
+          assets_status=$(curl -sS --max-time 300 -o "$assets_file" -w '%{http_code}' \
+            -X POST "$base/api/content/$content_id/assets")
+          if [ "$assets_status" -lt 200 ] || [ "$assets_status" -ge 300 ]; then
+            echo "Asset generation deferred with HTTP $assets_status; content remains safely IN_REVIEW."
+            cat "$assets_file"
+            exit 0
+          fi
+          jq '{id,status,assets:(.assets|length),driveLinks:(.googleDriveUrls|length)}' "$assets_file"
+          test "$(jq -r '.status' "$assets_file")" = 'IN_REVIEW'
+          test "$(jq -r '(.assets|length) > 0' "$assets_file")" = 'true'
+
+          echo 'New report processed with assets and Drive links. Content is IN_REVIEW; nothing was published or sent READY.'

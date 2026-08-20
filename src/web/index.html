@@ -52,17 +52,17 @@
           <h2>من الذكاء إلى منشور عام — بموافقة بشرية إلزامية</h2>
           <p>التقارير والفرص والمحتوى والأصول والمراجعة وClickUp وMake والنتائج في مكان واحد.</p>
         </div>
-        <div class="hero-state"><span>وضع النشر</span><strong id="publishMode">—</strong></div>
+        <button class="hero-state interactive-card" type="button" data-view-link="integrations"><span>وضع النشر</span><strong id="publishMode">—</strong></button>
       </div>
 
       <div class="workflow panel" id="workflow">
-        <div class="flow-step"><b>1</b><span>Reports</span></div><i>←</i>
-        <div class="flow-step"><b>2</b><span>Opportunities</span></div><i>←</i>
-        <div class="flow-step"><b>3</b><span>Content</span></div><i>←</i>
-        <div class="flow-step"><b>4</b><span>IN REVIEW</span></div><i>←</i>
-        <div class="flow-step accent"><b>5</b><span>ClickUp READY</span></div><i>←</i>
-        <div class="flow-step accent"><b>6</b><span>Make</span></div><i>←</i>
-        <div class="flow-step success"><b>7</b><span>PUBLISHED</span></div>
+        <button class="flow-step" type="button" data-view-link="reports"><b>1</b><span>Reports</span></button><i>←</i>
+        <button class="flow-step" type="button" data-view-link="opportunities"><b>2</b><span>Opportunities</span></button><i>←</i>
+        <button class="flow-step" type="button" data-view-link="content"><b>3</b><span>Content</span></button><i>←</i>
+        <button class="flow-step" type="button" data-view-link="content" data-content-status="IN_REVIEW"><b>4</b><span>IN REVIEW</span></button><i>←</i>
+        <button class="flow-step accent" type="button" data-view-link="content" data-content-status="READY"><b>5</b><span>ClickUp READY</span></button><i>←</i>
+        <button class="flow-step accent" type="button" data-view-link="integrations"><b>6</b><span>Make</span></button><i>←</i>
+        <button class="flow-step success" type="button" data-view-link="content" data-content-status="PUBLISHED"><b>7</b><span>PUBLISHED</span></button>
       </div>
 
       <div class="metrics-grid" id="metricsGrid"></div>
@@ -136,6 +136,11 @@
 <div class="modal wide" id="contentModal" aria-hidden="true">
   <div class="modal-head"><div><h3 id="contentModalTitle">تفاصيل المحتوى</h3><p id="contentModalMeta"></p></div><button class="icon-btn" data-close>×</button></div>
   <div id="contentModalBody"></div>
+</div>
+
+<div class="modal wide" id="reportDetailsModal" aria-hidden="true">
+  <div class="modal-head"><div><h3 id="reportDetailsTitle">تفاصيل التقرير</h3><p id="reportDetailsMeta"></p></div><button class="icon-btn" data-close>×</button></div>
+  <div id="reportDetailsBody"></div>
 </div>
 
 <div class="modal small" id="confirmModal" aria-hidden="true">

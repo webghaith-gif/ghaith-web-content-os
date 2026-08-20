@@ -153,6 +153,25 @@ export class GoogleDriveAdapter {
     return response.json() as Promise<DriveUploadResult>;
   }
 
+  async upsertBytes(name: string, bytes: Uint8Array, mimeType: string, parentFolderId?: string): Promise<DriveUploadResult | undefined> {
+    const token = await this.getAccessToken();
+    if (!token) return undefined;
+    const folderId = parentFolderId ?? await this.ensureExportFolder();
+    if (!folderId) return undefined;
+    const existing = await this.findFileByName(name, folderId, token);
+    if (!existing) return this.uploadBytes(name, bytes, mimeType, folderId);
+
+    const binary = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(binary).set(bytes);
+    const response = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(existing.id)}?uploadType=media&fields=id,name,webViewLink`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': mimeType },
+      body: binary,
+    });
+    if (!response.ok) throw new Error(`Google Drive binary update failed: ${response.status} ${await response.text()}`);
+    return response.json() as Promise<DriveUploadResult>;
+  }
+
   async ensureExportFolder(): Promise<string | undefined> {
     if (env.GOOGLE_DRIVE_FOLDER_ID) return env.GOOGLE_DRIVE_FOLDER_ID;
     const stored = await this.store?.getGoogleDriveFolderId();

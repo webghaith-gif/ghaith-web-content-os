@@ -98,7 +98,7 @@ export class AssetService {
       const fallback = await renderFallbackMedia(content);
 
       if (missingKinds.includes('social') && fallback.social) {
-        const file = await this.drive.uploadBytes(`${content.id}-social-fallback.png`, fallback.social, 'image/png', reportFolderId);
+        const file = await this.drive.upsertBytes(`${content.id}-social-fallback.png`, fallback.social, 'image/png', reportFolderId);
         if (file?.webViewLink) {
           fallbackFiles.push(file.webViewLink);
           newDriveUrls.push(file.webViewLink);
@@ -108,7 +108,7 @@ export class AssetService {
 
       if (missingKinds.includes('carousel')) {
         for (let index = 0; index < fallback.carouselSlides.length; index += 1) {
-          const file = await this.drive.uploadBytes(
+          const file = await this.drive.upsertBytes(
             `${content.id}-carousel-${String(index + 1).padStart(2, '0')}.png`,
             fallback.carouselSlides[index]!,
             'image/png',
@@ -121,7 +121,7 @@ export class AssetService {
           }
         }
         if (fallback.carouselPdf) {
-          const pdf = await this.drive.uploadBytes(`${content.id}-carousel.pdf`, fallback.carouselPdf, 'application/pdf', reportFolderId);
+          const pdf = await this.drive.upsertBytes(`${content.id}-carousel.pdf`, fallback.carouselPdf, 'application/pdf', reportFolderId);
           if (pdf?.webViewLink) {
             fallbackFiles.push(pdf.webViewLink);
             newDriveUrls.push(pdf.webViewLink);
@@ -131,7 +131,7 @@ export class AssetService {
       }
 
       if (missingKinds.includes('video') && fallback.video) {
-        const file = await this.drive.uploadBytes(`${content.id}-video-fallback.mp4`, fallback.video, 'video/mp4', reportFolderId);
+        const file = await this.drive.upsertBytes(`${content.id}-video-fallback.mp4`, fallback.video, 'video/mp4', reportFolderId);
         if (file?.webViewLink) {
           fallbackFiles.push(file.webViewLink);
           newDriveUrls.push(file.webViewLink);
