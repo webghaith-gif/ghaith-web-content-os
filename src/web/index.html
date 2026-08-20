@@ -8,7 +8,7 @@
   <title>Ghaith Web Content OS</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="/styles.css?v=6" />
+  <link rel="stylesheet" href="/styles.css?v=7" />
 </head>
 <body>
 <div class="app-shell">
@@ -36,7 +36,11 @@
     <header class="topbar">
       <div class="top-title">
         <button class="icon-btn mobile-only" id="menuBtn" aria-label="القائمة">☰</button>
-        <div><h1 id="pageTitle">لوحة التحكم</h1><p id="pageSubtitle">متابعة المنظومة من الفكرة حتى النشر</p></div>
+        <div class="nav-history" role="group" aria-label="التنقل بين الصفحات">
+          <button class="icon-btn nav-arrow" id="navBackBtn" type="button" aria-label="الرجوع إلى الصفحة السابقة" title="رجوع" disabled>→</button>
+          <button class="icon-btn nav-arrow" id="navForwardBtn" type="button" aria-label="التقدم إلى الصفحة التالية" title="تقدّم" disabled>←</button>
+        </div>
+        <div class="title-copy"><h1 id="pageTitle">لوحة التحكم</h1><p id="pageSubtitle">متابعة المنظومة من الفكرة حتى النشر</p></div>
       </div>
       <div class="top-actions">
         <button class="btn ghost" id="installBtn" hidden>تثبيت التطبيق</button>
@@ -149,7 +153,7 @@
 </div>
 
 <div id="toastHost" class="toast-host"></div>
-<script src="/app.js?v=6" defer></script>
+<script src="/app.js?v=7" defer></script>
 <script src="/linkify.js" defer></script>
 <script src="/notifications.js?v=6" defer></script>
 <!-- deployment retry marker: 2026-08-19 -->
