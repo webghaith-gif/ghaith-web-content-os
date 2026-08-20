@@ -8,21 +8,33 @@
   },
   "scripts": {
     "dev": "node --env-file=.env -r ts-node/register/transpile-only src/server.ts",
-    "build": "tsc -p tsconfig.json && node scripts/copy-static.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/copy-static.mjs && node scripts/bundle-remotion.mjs",
+    "render:sample": "remotion render src/remotion/index.tsx GhaithVertical tmp/ghaith-remotion-sample.mp4 --codec=h264",
     "start": "node --env-file=.env dist/src/server.js",
     "test": "npm run build && node --test dist/tests/*.test.js",
     "check": "tsc -p tsconfig.json --noEmit",
     "migrate:postgres": "npm run build && node --env-file=.env dist/src/scripts/migrate-json-to-postgres.js"
   },
   "devDependencies": {
+    "@remotion/cli": "4.0.506",
     "@types/node": "26.1.2",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
     "ts-node": "10.9.2",
     "typescript": "6.0.3"
   },
   "dependencies": {
+    "@remotion/bundler": "4.0.506",
+    "@remotion/fonts": "4.0.506",
+    "@remotion/transitions": "4.0.506",
+    "@remotion/vercel": "4.0.506",
+    "@vercel/sandbox": "^3.0.1",
     "ffmpeg-static": "5.2.0",
     "pdf-lib": "1.17.1",
     "pg": "8.22.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "remotion": "4.0.506",
     "sharp": "0.34.3",
     "web-push": "3.6.7"
   }
