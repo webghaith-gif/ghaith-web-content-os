@@ -14,6 +14,7 @@
   };
   const supported=()=>('serviceWorker'in navigator)&&('PushManager'in window)&&('Notification'in window);
   let button;
+  let isEnabled=false;
 
   async function registration(){
     await navigator.serviceWorker.register('/sw.js');
@@ -27,13 +28,31 @@
   }
 
   function render(enabled=false,busy=false){
+    isEnabled=enabled;
     if(!button)return;
     button.disabled=busy;
-    button.textContent=busy?'جاري التفعيل…':enabled?'🔔 الإشعارات مفعّلة':'🔔 تفعيل الإشعارات';
-    button.title=enabled?'إشعارات المحتوى وGoogle Drive مفعّلة':'تفعيل إشعارات المحتوى وGoogle Drive';
+    button.textContent=busy?'جاري التنفيذ…':enabled?'🔔 الإشعارات مفعّلة — اختبار':'🔔 تفعيل الإشعارات';
+    button.title=enabled?'اضغط لإرسال إشعار تجريبي الآن':'تفعيل إشعارات المحتوى وGoogle Drive';
+  }
+
+  async function sendTest(){
+    render(true,true);
+    try{
+      const result=await api('/api/notifications/test',{method:'POST'});
+      render(true,false);
+      const delivered=Number(result.delivered||0);
+      const failed=Number(result.failed||0);
+      alert(delivered>0
+        ? `تم إرسال إشعار تجريبي إلى جهازك ✅\nتم التسليم: ${delivered}${failed?` — فشل: ${failed}`:''}`
+        : `لم يتم تسليم الإشعار التجريبي. عدد الاشتراكات: ${result.subscriptions||0}`);
+    }catch(error){
+      render(true,false);
+      alert(`تعذر اختبار الإشعارات: ${error.message||error}`);
+    }
   }
 
   async function enable(){
+    if(isEnabled)return sendTest();
     if(!supported())return alert('هذا المتصفح لا يدعم إشعارات الويب على هذا الجهاز.');
     render(false,true);
     try{
