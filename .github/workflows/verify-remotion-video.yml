@@ -45,8 +45,8 @@ jobs:
         run: |
           test -s ghaith-remotion-sample.mp4
           test "$(stat -c%s ghaith-remotion-sample.mp4)" -gt 100000
-          width="$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 ghaith-remotion-sample.mp4)"
-          height="$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 ghaith-remotion-sample.mp4)"
+          width="$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 ghaith-remotion-sample.mp4 | tr -cd '0-9')"
+          height="$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 ghaith-remotion-sample.mp4 | tr -cd '0-9')"
           echo "Dimensions: ${width}x${height}"
           test "$width" -eq 1080
           test "$height" -eq 1920
