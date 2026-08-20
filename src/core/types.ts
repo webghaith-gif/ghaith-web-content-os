@@ -16,6 +16,8 @@ export interface Report {
   body: string;
   source?: string;
   createdAt: string;
+  googleDriveUrl?: string;
+  googleDriveFolderUrl?: string;
 }
 
 export interface OpportunityScore {

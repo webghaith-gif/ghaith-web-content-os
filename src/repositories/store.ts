@@ -40,6 +40,14 @@ export class Store {
     if (!item) throw new NotFoundError('Report');
     return item;
   }
+  async updateReport(id: string, patch: Partial<Report>) {
+    return this.db.mutate((db) => {
+      const index = db.reports.findIndex((x) => x.id === id);
+      if (index < 0) throw new NotFoundError('Report');
+      db.reports[index] = { ...db.reports[index]!, ...patch };
+      return db.reports[index]!;
+    });
+  }
 
   async saveOpportunity(input: Omit<Opportunity, 'id' | 'createdAt'>): Promise<Opportunity> {
     const titleKey = normalizeForDedup(input.title);
