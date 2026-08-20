@@ -3,7 +3,7 @@ import { env } from '../config/env';
 export interface HeyGenConnectionProbe {
   ok: boolean;
   enabled: boolean;
-  mode: 'api' | 'webhook' | 'none';
+  mode: 'webhook' | 'none';
   avatarConfigured: boolean;
   voiceConfigured: boolean;
   message?: string;
@@ -11,7 +11,6 @@ export interface HeyGenConnectionProbe {
 
 export class HeyGenAdapter {
   get mode(): HeyGenConnectionProbe['mode'] {
-    if (env.HEYGEN_API_KEY) return 'api';
     if (env.HEYGEN_AUTOMATION_WEBHOOK_URL) return 'webhook';
     return 'none';
   }
@@ -25,13 +24,22 @@ export class HeyGenAdapter {
       avatarConfigured: Boolean(env.HEYGEN_AVATAR_ID),
       voiceConfigured: Boolean(env.HEYGEN_VOICE_ID),
     } as const;
-    if (this.mode === 'none') return { ok: false, ...base, message: 'HeyGen is not configured.' };
-    if (this.mode === 'webhook') return { ok: true, ...base };
+    if (this.mode === 'none') {
+      return {
+        ok: false,
+        ...base,
+        message: env.HEYGEN_API_KEY
+          ? 'A legacy HeyGen API key was found but is intentionally not used. Configure HEYGEN_AUTOMATION_WEBHOOK_URL.'
+          : 'HeyGen automation webhook is not configured.',
+      };
+    }
     try {
-      const response = await fetch(`${env.HEYGEN_API_URL}/v2/avatars`, {
-        headers: { 'x-api-key': env.HEYGEN_API_KEY! },
+      const response = await fetch(env.HEYGEN_AUTOMATION_WEBHOOK_URL!, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'connection_test', source: 'ghaith-web-content-os' }),
       });
-      if (!response.ok) return { ok: false, ...base, message: `HeyGen returned ${response.status}.` };
+      if (!response.ok) return { ok: false, ...base, message: `HeyGen automation returned ${response.status}.` };
       return { ok: true, ...base };
     } catch (error) {
       return { ok: false, ...base, message: error instanceof Error ? error.message : String(error) };
@@ -40,40 +48,12 @@ export class HeyGenAdapter {
 
   async requestVideo(payload: Record<string, unknown>): Promise<unknown | undefined> {
     if (this.mode === 'none') return undefined;
-    if (this.mode === 'webhook') {
-      const response = await fetch(env.HEYGEN_AUTOMATION_WEBHOOK_URL!, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
-      });
-      if (!response.ok) throw new Error(`HeyGen automation failed: ${response.status}`);
-      return response.json().catch(() => ({}));
-    }
-
-    if (!env.HEYGEN_AVATAR_ID) throw new Error('HEYGEN_AVATAR_ID is required for direct HeyGen video generation.');
-    const script = typeof payload.script === 'string' ? payload.script.trim() : '';
-    if (!script) throw new Error('HeyGen video generation requires a non-empty script.');
-
-    const character = env.HEYGEN_AVATAR_TYPE === 'photo_avatar'
-      ? { type: 'talking_photo', talking_photo_id: env.HEYGEN_AVATAR_ID }
-      : { type: 'avatar', avatar_id: env.HEYGEN_AVATAR_ID, avatar_style: 'normal' };
-    const voice: Record<string, unknown> = { type: 'text', input_text: script };
-    if (env.HEYGEN_VOICE_ID) voice.voice_id = env.HEYGEN_VOICE_ID;
-
-    const response = await fetch(`${env.HEYGEN_API_URL}/v2/video/generate`, {
+    const response = await fetch(env.HEYGEN_AUTOMATION_WEBHOOK_URL!, {
       method: 'POST',
-      headers: {
-        'x-api-key': env.HEYGEN_API_KEY!,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        title: typeof payload.title === 'string' ? payload.title : 'Ghaith Web Content OS',
-        caption: false,
-        dimension: { width: 1080, height: 1920 },
-        video_inputs: [{ character, voice }],
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'generate_presenter_video', ...payload }),
     });
-    if (!response.ok) throw new Error(`HeyGen request failed: ${response.status} ${await response.text()}`);
-    const data = await response.json() as { data?: { video_id?: string }; error?: unknown };
-    if (!data.data?.video_id) throw new Error('HeyGen response did not include video_id.');
-    return { videoId: data.data.video_id };
+    if (!response.ok) throw new Error(`HeyGen automation failed: ${response.status}`);
+    return response.json().catch(() => ({}));
   }
 }
