@@ -9,7 +9,6 @@ import { PDFDocument } from 'pdf-lib';
 import type { ContentItem } from '../core/types';
 
 const execFileAsync = promisify(execFile);
-let embeddedArabicFont: string | undefined;
 
 export interface RenderedMedia {
   social?: Uint8Array;
@@ -65,50 +64,47 @@ export async function renderFallbackMedia(content: ContentItem): Promise<Rendere
 }
 
 async function renderPng(input: { width: number; height: number; eyebrow: string; title: string; body: string; footer: string }) {
-  const svg = await buildSvg(input);
-  const output = await sharp(Buffer.from(svg)).png({ compressionLevel: 8 }).toBuffer();
-  await assertReadableText(output, input);
-  return new Uint8Array(output);
-}
-
-async function buildSvg(input: { width: number; height: number; eyebrow: string; title: string; body: string; footer: string }) {
   const { width, height } = input;
   const margin = Math.round(width * 0.075);
   const titleSize = height > 1500 ? 76 : height > 1200 ? 62 : 58;
   const bodySize = height > 1500 ? 42 : 36;
   const titleLines = wrapArabic(input.title, height > 1500 ? 19 : 24, 4);
   const bodyLines = wrapArabic(input.body, height > 1500 ? 31 : 38, height > 1500 ? 8 : 7);
-  const titleY = height > 1500 ? 520 : height > 1200 ? 390 : 340;
+  const titleY = height > 1500 ? 470 : height > 1200 ? 340 : 290;
   const bodyY = titleY + titleLines.length * (titleSize + 18) + 54;
-  const fontData = await arabicFontData();
+  const fontfile = path.join(__dirname, '..', 'assets', 'DejaVuSans.ttf');
+  const background = Buffer.from(buildBackgroundSvg(width, height, margin));
+  const layers = await Promise.all([
+    textLayer(input.eyebrow, width - margin * 2, 55, 30, '#FFFDF8', fontfile, true),
+    textLayer(titleLines.join('\n'), width - margin * 2, Math.min(420, titleLines.length * (titleSize + 22)), titleSize, '#0B1F3A', fontfile, true),
+    textLayer(bodyLines.join('\n'), width - margin * 2, Math.min(540, bodyLines.length * (bodySize + 22)), bodySize, '#10243F', fontfile, false),
+    textLayer(input.footer, width - margin * 2, 55, 30, '#0B1F3A', fontfile, true),
+  ]);
+  const output = await sharp(background).composite([
+    { input: layers[0]!, left: margin, top: Math.round(height * 0.055) },
+    { input: layers[1]!, left: margin, top: titleY },
+    { input: layers[2]!, left: margin, top: bodyY },
+    { input: layers[3]!, left: margin, top: height - 105 },
+  ]).png({ compressionLevel: 8 }).toBuffer();
+  await assertReadableText(output, input);
+  return new Uint8Array(output);
+}
 
+function buildBackgroundSvg(width: number, height: number, margin: number) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <style><![CDATA[
-    @font-face { font-family: 'Ghaith Arabic'; src: url(data:font/ttf;base64,${fontData}) format('truetype'); font-weight: 100 900; }
-    text { font-family: 'Ghaith Arabic'; }
-  ]]></style>
   <rect width="100%" height="100%" fill="#F4EBDD"/>
   <rect x="0" y="0" width="${width}" height="${Math.round(height * 0.18)}" fill="#0B1F3A"/>
   <circle cx="${Math.round(width * 0.89)}" cy="${Math.round(height * 0.05)}" r="${Math.round(width * 0.19)}" fill="#67B7E8" opacity="0.95"/>
   <circle cx="${Math.round(width * 0.03)}" cy="${Math.round(height * 0.18)}" r="${Math.round(width * 0.16)}" fill="#D5A53A" opacity="0.95"/>
-  <text x="${width - margin}" y="${Math.round(height * 0.105)}" text-anchor="end" fill="#FFFDF8" font-size="30" font-weight="700">${escapeXml(input.eyebrow)}</text>
-  ${svgLines(titleLines, width - margin, titleY, titleSize, titleSize + 18, '#0B1F3A', 700)}
-  ${svgLines(bodyLines, width - margin, bodyY, bodySize, bodySize + 19, '#10243F', 400)}
   <line x1="${margin}" y1="${height - 110}" x2="${width - margin}" y2="${height - 110}" stroke="#C7B89C" stroke-width="2"/>
-  <text x="${width - margin}" y="${height - 55}" text-anchor="start" fill="#0B1F3A" font-size="30" font-weight="700" direction="rtl">${escapeXml(input.footer)}</text>
 </svg>`;
 }
 
-function svgLines(lines: string[], x: number, y: number, size: number, spacing: number, fill: string, weight: number) {
-  return lines.map((line, index) => `<text x="${x}" y="${y + index * spacing}" text-anchor="start" direction="rtl" unicode-bidi="plaintext" fill="${fill}" font-size="${size}" font-weight="${weight}">${escapeXml(line)}</text>`).join('\n');
-}
-
-async function arabicFontData() {
-  if (embeddedArabicFont) return embeddedArabicFont;
-  const fontPath = path.join(__dirname, '..', 'assets', 'DejaVuSans.ttf');
-  embeddedArabicFont = Buffer.from(await readFile(fontPath)).toString('base64');
-  return embeddedArabicFont;
+async function textLayer(value: string, width: number, height: number, size: number, color: string, fontfile: string, bold: boolean) {
+  if (!value.trim()) return sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
+  const markup = `<span foreground="${color}" weight="${bold ? 'bold' : 'normal'}" size="${size * 700}">${escapeXml(value)}</span>`;
+  return sharp({ text: { text: markup, fontfile, width, height, align: 'right', rgba: true } }).png().toBuffer();
 }
 
 async function assertReadableText(output: Buffer, input: { width: number; height: number; title: string; body: string }) {
