@@ -24,6 +24,7 @@ export class AssetService {
 
   async requestAssets(contentId: string) {
     const content = await this.store.getContent(contentId);
+    const reportFolderId = await this.reportFolderId(content);
     const needsAvatar = wantsAvatar(content.contentType, content.package.videoPrompt);
 
     // Canva is the primary asset factory. HeyGen is optional raw avatar/video input only.
@@ -89,7 +90,12 @@ export class AssetService {
         const ext = design.exportFormat === 'mp4' ? 'mp4' : 'png';
         const mimeType = design.exportFormat === 'mp4' ? 'video/mp4' : 'image/png';
         const suffix = design.exportUrls.length > 1 ? `-${index + 1}` : '';
-        const driveFile = await this.drive.uploadFromUrl(`${content.id}-${design.kind}${suffix}.${ext}`, design.exportUrls[index]!, mimeType);
+        const driveFile = await this.drive.uploadFromUrl(
+          `${content.id}-${design.kind}${suffix}.${ext}`,
+          design.exportUrls[index]!,
+          mimeType,
+          reportFolderId,
+        );
         if (driveFile?.webViewLink) {
           newDriveUrls.push(driveFile.webViewLink);
           newAssets.push({ kind, url: driveFile.webViewLink, provider: 'google-drive', providerId: driveFile.id });
@@ -100,6 +106,8 @@ export class AssetService {
     const manifest = JSON.stringify({
       contentId,
       title: content.title,
+      sourceReportId: content.sourceReportId,
+      reportFolderId,
       primaryAssetFactory: 'canva',
       requestedKinds,
       designs,
@@ -107,13 +115,27 @@ export class AssetService {
       optionalAvatarSource: avatarVideo,
       generatedAt: new Date().toISOString(),
     }, null, 2);
-    const manifestFile = await this.drive.uploadText(`${content.id}-asset-manifest.json`, manifest, 'application/json');
+    const manifestFile = await this.drive.uploadText(
+      `${content.id}-asset-manifest.json`,
+      manifest,
+      'application/json',
+      reportFolderId,
+    );
     if (manifestFile?.webViewLink) newDriveUrls.push(manifestFile.webViewLink);
 
     return this.store.updateContent(contentId, {
       assets: [...content.assets, ...newAssets],
-      googleDriveUrls: [...content.googleDriveUrls, ...newDriveUrls],
+      googleDriveUrls: [...new Set([...content.googleDriveUrls, ...newDriveUrls])],
     });
+  }
+
+  private async reportFolderId(content: ContentItem): Promise<string | undefined> {
+    if (!content.sourceReportId) return this.drive.ensureExportFolder();
+    const report = await this.store.getReport(content.sourceReportId);
+    const root = await this.drive.ensureExportFolder();
+    if (!root) return undefined;
+    const name = report.title.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) || `Report ${report.id}`;
+    return this.drive.ensureChildFolder(name, root);
   }
 }
 
