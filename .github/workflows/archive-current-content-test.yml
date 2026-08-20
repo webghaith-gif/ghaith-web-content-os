@@ -1,0 +1,25 @@
+name: Archive Current Content Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/archive-current-content-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  archive-and-notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Re-run current content idempotently
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 180 \
+            -X POST 'https://ghaith-web-content-os.vercel.app/api/opportunities/e319a395-ef1a-4ac8-921f-f8e22219a7c5/content' \
+            -H 'Content-Type: application/json' \
+            -d '{"platforms":["facebook","instagram","tiktok","pinterest","youtube"]}' \
+            | jq '{id,title,status,googleDriveUrls}'
