@@ -2,6 +2,7 @@ import { Store } from '../repositories/store';
 import { CanvaAdapter, type CanvaAssetKind, type CanvaDesignResult } from '../integrations/canva.adapter';
 import { HeyGenAdapter } from '../integrations/heygen.adapter';
 import { GoogleDriveAdapter } from '../integrations/google-drive.adapter';
+import { renderFallbackMedia } from './fallback-media-renderer';
 import type { AssetRef, ContentItem } from '../core/types';
 
 export class AssetService {
@@ -15,8 +16,6 @@ export class AssetService {
     heygen?: HeyGenAdapter,
     drive?: GoogleDriveAdapter,
   ) {
-    // Important: OAuth-backed integrations must share the same Store so tokens persisted
-    // in Neon are available to the asset factory and can be refreshed automatically.
     this.canva = canva ?? new CanvaAdapter(store);
     this.heygen = heygen ?? new HeyGenAdapter();
     this.drive = drive ?? new GoogleDriveAdapter(store);
@@ -27,14 +26,13 @@ export class AssetService {
     const reportFolderId = await this.reportFolderId(content);
     const needsAvatar = wantsAvatar(content.contentType, content.package.videoPrompt);
 
-    // Canva is the primary asset factory. HeyGen is optional raw avatar/video input only.
     const avatarVideo = needsAvatar
       ? await this.heygen.requestVideo({
           contentId,
           title: content.title,
           script: content.package.script,
           prompt: content.package.videoPrompt,
-        })
+        }).catch(() => undefined)
       : undefined;
 
     const requestedKinds = desiredCanvaKinds(content);
@@ -68,17 +66,6 @@ export class AssetService {
       }
     }
 
-    // Never report a successful asset request when Canva, our primary factory,
-    // failed to produce every requested design. This also makes production
-    // diagnostics actionable instead of silently returning an empty asset list.
-    if (designs.length === 0 && designErrors.length > 0) {
-      const summary = designErrors
-        .map(({ kind, message }) => `${kind}: ${message}`)
-        .join('; ')
-        .slice(0, 1200);
-      throw new Error(`Canva asset generation failed: ${summary}`);
-    }
-
     const newAssets: AssetRef[] = [];
     const newDriveUrls: string[] = [];
     for (const design of designs) {
@@ -103,19 +90,70 @@ export class AssetService {
       }
     }
 
+    const succeededKinds = new Set(designs.map((design) => design.kind));
+    const missingKinds = requestedKinds.filter((kind) => !succeededKinds.has(kind));
+    const fallbackFiles: string[] = [];
+
+    if (missingKinds.length > 0) {
+      const fallback = await renderFallbackMedia(content);
+
+      if (missingKinds.includes('social') && fallback.social) {
+        const file = await this.drive.uploadBytes(`${content.id}-social-fallback.png`, fallback.social, 'image/png', reportFolderId);
+        if (file?.webViewLink) {
+          fallbackFiles.push(file.webViewLink);
+          newDriveUrls.push(file.webViewLink);
+          newAssets.push({ kind: 'image', url: file.webViewLink, provider: 'google-drive', providerId: file.id });
+        }
+      }
+
+      if (missingKinds.includes('carousel')) {
+        for (let index = 0; index < fallback.carouselSlides.length; index += 1) {
+          const file = await this.drive.uploadBytes(
+            `${content.id}-carousel-${String(index + 1).padStart(2, '0')}.png`,
+            fallback.carouselSlides[index]!,
+            'image/png',
+            reportFolderId,
+          );
+          if (file?.webViewLink) {
+            fallbackFiles.push(file.webViewLink);
+            newDriveUrls.push(file.webViewLink);
+            newAssets.push({ kind: 'carousel', url: file.webViewLink, provider: 'google-drive', providerId: file.id });
+          }
+        }
+        if (fallback.carouselPdf) {
+          const pdf = await this.drive.uploadBytes(`${content.id}-carousel.pdf`, fallback.carouselPdf, 'application/pdf', reportFolderId);
+          if (pdf?.webViewLink) {
+            fallbackFiles.push(pdf.webViewLink);
+            newDriveUrls.push(pdf.webViewLink);
+            newAssets.push({ kind: 'carousel', url: pdf.webViewLink, provider: 'google-drive', providerId: pdf.id });
+          }
+        }
+      }
+
+      if (missingKinds.includes('video') && fallback.video) {
+        const file = await this.drive.uploadBytes(`${content.id}-video-fallback.mp4`, fallback.video, 'video/mp4', reportFolderId);
+        if (file?.webViewLink) {
+          fallbackFiles.push(file.webViewLink);
+          newDriveUrls.push(file.webViewLink);
+          newAssets.push({ kind: 'video', url: file.webViewLink, provider: 'google-drive', providerId: file.id });
+        }
+      }
+    }
+
     const manifest = JSON.stringify({
       contentId,
       title: content.title,
       sourceReportId: content.sourceReportId,
       reportFolderId,
-      primaryAssetFactory: 'canva',
       requestedKinds,
-      designs,
-      designErrors,
+      canvaDesigns: designs,
+      canvaErrors: designErrors,
+      fallbackUsedFor: missingKinds,
+      fallbackFiles,
       optionalAvatarSource: avatarVideo,
       generatedAt: new Date().toISOString(),
     }, null, 2);
-    const manifestFile = await this.drive.uploadText(
+    const manifestFile = await this.drive.upsertText(
       `${content.id}-asset-manifest.json`,
       manifest,
       'application/json',
@@ -124,7 +162,7 @@ export class AssetService {
     if (manifestFile?.webViewLink) newDriveUrls.push(manifestFile.webViewLink);
 
     return this.store.updateContent(contentId, {
-      assets: [...content.assets, ...newAssets],
+      assets: dedupeAssets([...content.assets, ...newAssets]),
       googleDriveUrls: [...new Set([...content.googleDriveUrls, ...newDriveUrls])],
     });
   }
@@ -166,4 +204,14 @@ function wantsAvatar(contentType?: string, prompt?: string): boolean {
 
 function isCanvaDesignResult(value: unknown): value is CanvaDesignResult {
   return Boolean(value && typeof value === 'object' && 'designId' in value && 'exportUrls' in value);
+}
+
+function dedupeAssets(values: AssetRef[]) {
+  const seen = new Set<string>();
+  return values.filter((asset) => {
+    const key = `${asset.provider ?? ''}:${asset.providerId ?? ''}:${asset.url}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
