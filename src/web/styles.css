@@ -14,3 +14,12 @@
 .drive-link:hover{border-color:#67b7e8;background:#f6fbfe}
 .report-full-text{white-space:pre-wrap;max-height:55vh;overflow:auto;line-height:1.9}
 .table-actions{display:flex;gap:7px;flex-wrap:wrap}.drive-button{text-decoration:none;display:inline-flex;align-items:center}
+
+html{scroll-behavior:smooth}
+.top-title{min-width:0}.title-copy{min-width:0}.nav-history{display:flex;align-items:center;gap:5px;direction:rtl}
+.nav-arrow{transition:transform .16s ease,background-color .16s ease,opacity .16s ease}
+.nav-arrow:not(:disabled):hover{background:#fff8e7;transform:translateY(-1px)}
+.nav-arrow:disabled{opacity:.3;cursor:not-allowed}
+.view.active{animation:viewEnter .22s ease both}
+@keyframes viewEnter{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+@media(max-width:640px){.topbar{gap:7px}.top-title{gap:6px;flex:1}.title-copy{overflow:hidden}.top-title h1{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nav-history{gap:3px}.nav-history .icon-btn{width:33px;height:36px;font-size:17px}.top-actions{gap:4px}}
