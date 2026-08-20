@@ -51,6 +51,24 @@ export interface VideoSceneContent {
   body?: string;
 }
 
+export interface PlatformContentVariant {
+  hook?: string;
+  caption?: string;
+  description?: string;
+  cta?: string;
+  title?: string;
+  hashtags?: string[];
+}
+
+export interface ContentQualityReview {
+  score?: number;
+  strengths?: string[];
+  issuesFixed?: string[];
+  sourceFaithful?: boolean;
+  platformAdapted?: boolean;
+  nonRepetitive?: boolean;
+}
+
 export interface ContentPackage {
   hook?: string;
   caption?: string;
@@ -60,10 +78,14 @@ export interface ContentPackage {
   keywords?: string[];
   imagePrompt?: string;
   videoPrompt?: string;
-  /** Structured 5-page carousel data for Canva Autofill. */
+  /** Structured 5-page carousel data for Canva Autofill or a fallback renderer. */
   carouselSlides?: CarouselSlideContent[];
-  /** Structured 3-scene vertical video data for Canva Autofill. */
+  /** Structured 3-scene vertical video data for Canva Autofill or a fallback renderer. */
   videoScenes?: VideoSceneContent[];
+  /** Platform-specific final copy. Used before the generic fields when available. */
+  platformCopies?: Record<string, PlatformContentVariant>;
+  /** AI self-review metadata kept with the package for audit and later refinement. */
+  qualityReview?: ContentQualityReview;
 }
 
 export interface AssetRef {
