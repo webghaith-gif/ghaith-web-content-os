@@ -93,7 +93,7 @@ export interface ContentPackage {
 export interface AssetRef {
   kind: 'image' | 'carousel' | 'video' | 'document' | 'other';
   url: string;
-  provider?: 'google-drive' | 'canva' | 'heygen' | 'external';
+  provider?: 'google-drive' | 'canva' | 'heygen' | 'remotion' | 'external';
   providerId?: string;
 }
 
