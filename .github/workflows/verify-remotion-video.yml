@@ -39,6 +39,13 @@ jobs:
           --concurrency=2
           --timeout=120000
           --props=tests/remotion-sample-props.json
+      - name: Render multi-format layout checks
+        run: |
+          mkdir -p remotion-format-frames
+          npx remotion still src/remotion/index.tsx GhaithLandscape remotion-format-frames/landscape.png --frame=220 --props=tests/remotion-sample-props.json
+          npx remotion still src/remotion/index.tsx GhaithSquare remotion-format-frames/square.png --frame=220 --props=tests/remotion-sample-props.json
+          npx remotion still src/remotion/index.tsx GhaithPortrait remotion-format-frames/portrait.png --frame=220 --props=tests/remotion-sample-props.json
+          npx remotion still src/remotion/index.tsx GhaithPinterest remotion-format-frames/pinterest.png --frame=220 --props=tests/remotion-sample-props.json
       - name: Install media inspector
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Validate media
@@ -50,6 +57,14 @@ jobs:
           echo "Dimensions: ${width}x${height}"
           test "$width" -eq 1080
           test "$height" -eq 1920
+          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 remotion-format-frames/landscape.png | tr -cd '0-9')" -eq 1920
+          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 remotion-format-frames/landscape.png | tr -cd '0-9')" -eq 1080
+          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 remotion-format-frames/square.png | tr -cd '0-9')" -eq 1080
+          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 remotion-format-frames/square.png | tr -cd '0-9')" -eq 1080
+          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 remotion-format-frames/portrait.png | tr -cd '0-9')" -eq 1080
+          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 remotion-format-frames/portrait.png | tr -cd '0-9')" -eq 1350
+          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 remotion-format-frames/pinterest.png | tr -cd '0-9')" -eq 1000
+          test "$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 remotion-format-frames/pinterest.png | tr -cd '0-9')" -eq 1500
           ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 ghaith-remotion-sample.mp4
           mkdir -p remotion-qa-frames
           ffmpeg -y -ss 1 -i ghaith-remotion-sample.mp4 -frames:v 1 remotion-qa-frames/01-opening.png
@@ -62,5 +77,6 @@ jobs:
           path: |
             ghaith-remotion-sample.mp4
             remotion-qa-frames/*.png
+            remotion-format-frames/*.png
           if-no-files-found: error
           retention-days: 7

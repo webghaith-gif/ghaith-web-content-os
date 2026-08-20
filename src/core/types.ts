@@ -93,7 +93,7 @@ export interface ContentPackage {
   videoPrompt?: string;
   /** Structured 5-page carousel data for Canva Autofill or a fallback renderer. */
   carouselSlides?: CarouselSlideContent[];
-  /** Structured 3-scene vertical video data for Canva Autofill or a fallback renderer. */
+  /** Structured 3-scene multi-format video data for Canva Autofill or Remotion. */
   videoScenes?: VideoSceneContent[];
   /** Platform-specific final copy. Used before the generic fields when available. */
   platformCopies?: Record<string, PlatformContentVariant>;
@@ -106,6 +106,10 @@ export interface AssetRef {
   url: string;
   provider?: 'google-drive' | 'canva' | 'heygen' | 'remotion' | 'external';
   providerId?: string;
+  format?: '9:16' | '16:9' | '1:1' | '4:5' | '2:3';
+  width?: number;
+  height?: number;
+  platforms?: string[];
 }
 
 export interface ContentItem {

@@ -6,12 +6,17 @@ test('Remotion is the video renderer and the static-frame MP4 fallback is disabl
   const assetService = await readFile('src/services/asset.service.ts', 'utf8');
   const fallbackRenderer = await readFile('src/services/fallback-media-renderer.ts', 'utf8');
   const remotionAdapter = await readFile('src/integrations/remotion.adapter.ts', 'utf8');
+  const remotionRoot = await readFile('src/remotion/root.tsx', 'utf8');
 
-  assert.match(assetService, /video-remotion\.mp4/);
+  assert.match(assetService, /video-remotion-\$\{video\.format\}/);
   assert.match(assetService, /provider: 'remotion'/);
   assert.doesNotMatch(assetService, /video-fallback\.mp4/);
   assert.doesNotMatch(fallbackRenderer, /makeVideo/);
   assert.match(remotionAdapter, /renderMediaOnVercel/);
+  for (const id of ['GhaithVertical', 'GhaithLandscape', 'GhaithSquare', 'GhaithPortrait', 'GhaithPinterest']) {
+    assert.match(remotionRoot, new RegExp(id));
+  }
+  assert.match(remotionAdapter, /selectRemotionFormats/);
 });
 
 test('HeyGen uses the automation bridge and does not call legacy v1 or v2 endpoints', async () => {
