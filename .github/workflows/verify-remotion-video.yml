@@ -7,6 +7,7 @@ on:
       - 'src/remotion/**'
       - 'src/integrations/remotion.adapter.ts'
       - 'src/services/asset.service.ts'
+      - 'scripts/copy-static.mjs'
       - 'tests/remotion-sample-props.json'
       - '.github/workflows/verify-remotion-video.yml'
       - 'package.json'
