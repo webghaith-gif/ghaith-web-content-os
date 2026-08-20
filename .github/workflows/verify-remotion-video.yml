@@ -36,7 +36,8 @@ jobs:
           npx remotion render src/remotion/index.tsx GhaithVertical
           ghaith-remotion-sample.mp4
           --codec=h264
-          --concurrency=4
+          --concurrency=2
+          --timeout=120000
           --props=tests/remotion-sample-props.json
       - name: Validate media
         run: |
