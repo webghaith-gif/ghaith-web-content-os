@@ -19,6 +19,8 @@ interface GoogleDriveOAuthStatus {
   folderId: string | null;
 }
 
+const SEARCH_CONSOLE_READONLY_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+
 export class GoogleDriveOAuthManager {
   constructor(private readonly store: Store) {}
 
@@ -55,11 +57,18 @@ export class GoogleDriveOAuthManager {
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
 
+    const scopes = [...new Set(
+      `${env.GOOGLE_DRIVE_SCOPES} ${SEARCH_CONSOLE_READONLY_SCOPE}`
+        .split(/\s+/)
+        .map((scope) => scope.trim())
+        .filter(Boolean),
+    )].join(' ');
+
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     url.searchParams.set('client_id', env.GOOGLE_DRIVE_CLIENT_ID!);
     url.searchParams.set('redirect_uri', redirectUri);
     url.searchParams.set('response_type', 'code');
-    url.searchParams.set('scope', env.GOOGLE_DRIVE_SCOPES);
+    url.searchParams.set('scope', scopes);
     url.searchParams.set('access_type', 'offline');
     url.searchParams.set('include_granted_scopes', 'true');
     url.searchParams.set('prompt', 'consent');
