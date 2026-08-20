@@ -23,3 +23,5 @@ html{scroll-behavior:smooth}
 .view.active{animation:viewEnter .22s ease both}
 @keyframes viewEnter{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
 @media(max-width:640px){.topbar{gap:7px}.top-title{gap:6px;flex:1}.title-copy{overflow:hidden}.top-title h1{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nav-history{gap:3px}.nav-history .icon-btn{width:33px;height:36px;font-size:17px}.top-actions{gap:4px}}
+.pill-manual{font-size:10px;font-weight:900;border-radius:999px;padding:4px 8px;background:#fff2cc;color:#8a6410}
+.integration-open{display:inline-block;text-decoration:none;color:var(--navy);margin-top:12px}
