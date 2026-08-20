@@ -1,11 +1,20 @@
 import { Store } from '../repositories/store';
 import { OpenAIAdapter } from '../integrations/openai.adapter';
+import { GoogleDriveAdapter } from '../integrations/google-drive.adapter';
+import { ContentArchiveService } from './content-archive.service';
+import { NotificationService } from './notification.service';
 
 export class ContentGenerationService {
+  private readonly archive: ContentArchiveService;
+  private readonly notifications: NotificationService;
+
   constructor(
     private readonly store: Store,
     private readonly ai = new OpenAIAdapter(),
-  ) {}
+  ) {
+    this.archive = new ContentArchiveService(store, new GoogleDriveAdapter(store));
+    this.notifications = new NotificationService(store);
+  }
 
   async createFromOpportunity(opportunityId: string, platforms: string[], oidcToken?: string) {
     const opportunity = await this.store.getOpportunity(opportunityId);
@@ -22,7 +31,7 @@ export class ContentGenerationService {
         })
       : fallbackPackage(opportunity.title);
 
-    return this.store.createContent({
+    const created = await this.store.createContent({
       title: opportunity.title,
       topic: opportunity.title,
       sourceReportId: opportunity.reportId,
@@ -36,6 +45,27 @@ export class ContentGenerationService {
       googleDriveUrls: [],
       status: 'IN_REVIEW',
     });
+
+    // Drive persistence is part of content creation, not a later manual step.
+    // If Drive is temporarily unavailable, the request fails so the caller can retry
+    // without creating a duplicate content item (Store.createContent is idempotent).
+    const archived = await this.archive.archive(created.id);
+
+    // Server-side Web Push: no browser refresh or open app is required.
+    // The application route may emit the same content-review tag afterwards; browsers
+    // replace the previous notification instead of stacking duplicates.
+    try {
+      await this.notifications.send({
+        title: 'محتوى جديد حُفظ تلقائيًا في Google Drive ✅',
+        body: `${archived.content.title} — جاهز للمراجعة.`,
+        url: archived.file.webViewLink ?? archived.folderUrl,
+        tag: `content-review-${archived.content.id}`,
+      });
+    } catch (error) {
+      console.warn('Immediate content push notification failed', error);
+    }
+
+    return archived.content;
   }
 
   private async generateWithAi(input: {
