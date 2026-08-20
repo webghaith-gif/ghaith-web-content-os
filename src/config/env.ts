@@ -116,6 +116,9 @@ export const env = {
   HEYGEN_AVATAR_TYPE: (process.env.HEYGEN_AVATAR_TYPE?.trim() || 'photo_avatar').toLowerCase(),
   HEYGEN_AUTOMATION_WEBHOOK_URL: optionalUrl('HEYGEN_AUTOMATION_WEBHOOK_URL'),
 
+  // Remotion renders in an isolated Vercel Sandbox. It is on by default only inside Vercel.
+  REMOTION_ENABLED: booleanEnv('REMOTION_ENABLED', process.env.VERCEL === '1'),
+
   SUPPORTED_PLATFORMS: process.env.SUPPORTED_PLATFORMS?.trim() || 'facebook,instagram,tiktok,pinterest,youtube,x',
 };
 
