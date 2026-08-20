@@ -76,7 +76,6 @@ export function createApp() {
             ClickUp: integrations.clickup.enabled,
             Make: integrations.make.enabled,
             'Google Drive': driveStatus.connected,
-            Semrush: integrations.semrush.enabled,
             Canva: integrations.canva.enabled,
             HeyGen: integrations.heygen.enabled,
             Remotion: integrations.remotion.enabled,
