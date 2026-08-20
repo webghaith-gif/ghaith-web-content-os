@@ -50,6 +50,8 @@ export class RemotionAdapter {
         codec: 'h264',
         x264Preset: 'medium',
         crf: 20,
+        concurrency: 2,
+        timeoutInMilliseconds: 120_000,
         inputProps: {
           title: clean(content.title, 100),
           hook: clean(content.package.hook || content.title, 90),
