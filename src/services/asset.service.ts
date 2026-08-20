@@ -212,8 +212,19 @@ export class AssetService {
     const newAssets: AssetRef[] = [];
     const newDriveUrls: string[] = [];
     const repairedFiles: Array<{ kind: CanvaAssetKind; name: string; url: string }> = [];
+    const replacedExistingFiles: Array<{ id: string; name: string; url: string }> = [];
 
     if (fallback.social) {
+      const existingImageIds = [...new Set(content.assets
+        .filter((asset) => asset.kind === 'image' && asset.provider === 'google-drive' && asset.providerId)
+        .map((asset) => asset.providerId!))];
+      for (const fileId of existingImageIds) {
+        const replaced = await this.drive.replaceBytes(fileId, fallback.social, 'image/png');
+        if (replaced?.webViewLink) {
+          replacedExistingFiles.push({ id: replaced.id, name: replaced.name, url: replaced.webViewLink });
+          newDriveUrls.push(replaced.webViewLink);
+        }
+      }
       const name = `${content.id}-social.png`;
       const file = await this.drive.upsertBytes(name, fallback.social, 'image/png', reportFolderId);
       if (file?.webViewLink) {
@@ -262,6 +273,7 @@ export class AssetService {
       reportFolderId,
       renderer: 'sharp-pango-dejavu-sans-and-ffmpeg',
       repairedFiles,
+      replacedExistingFiles,
       complete,
       missingKinds,
       videoError: fallback.videoError,
@@ -279,7 +291,7 @@ export class AssetService {
       assets: dedupeAssets([...content.assets, ...newAssets]),
       googleDriveUrls: [...new Set([...content.googleDriveUrls, ...newDriveUrls])],
     });
-    return { content: updated, repairedFiles, complete, missingKinds, videoError: fallback.videoError };
+    return { content: updated, repairedFiles, replacedExistingFiles, complete, missingKinds, videoError: fallback.videoError };
   }
 
   async ingestHeyGenVideo(input: { contentId: string; videoUrl: string; videoId?: string }) {

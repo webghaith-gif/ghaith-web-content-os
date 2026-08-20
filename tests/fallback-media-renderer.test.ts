@@ -13,7 +13,7 @@ test('fallback renderer produces non-empty Arabic social, carousel, PDF and MP4 
     contentType: 'multi-platform-video',
     package: {
       hook: 'حوّل تقريرك إلى محتوى جاهز لكل منصة',
-      caption: 'ابدأ بأفضل فرصة ثم أنشئ نصًا وصورة وكاروسيل وفيديو فعليًا.',
+      caption: 'ابدأ بأفضل فرصة ثم أنشئ نصًا وصورة وكاروسيل وفيديو فعليًا. 🚀',
       carouselSlides: [
         { title: 'ابدأ من التقرير', body: 'استخرج الفرصة الأعلى قيمة.', points: ['راجع الدليل', 'حدد الجمهور'] },
         { title: 'اكتب لكل منصة', body: 'لا تستخدم نصًا واحدًا للجميع.', points: ['Facebook للسياق', 'TikTok للسرعة'] },

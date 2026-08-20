@@ -14,6 +14,9 @@ test('Remotion is primary and a real MP4 fallback remains available when the san
   assert.match(fallbackRenderer, /makeVideo/);
   assert.match(fallbackRenderer, /DejaVuSans\.ttf/);
   assert.match(fallbackRenderer, /libx264/);
+  assert.match(fallbackRenderer, /Extended_Pictographic/);
+  assert.match(fallbackRenderer, /\\u200F•/);
+  assert.match(assetService, /replaceBytes/);
   assert.match(remotionAdapter, /renderMediaOnVercel/);
   assert.match(remotionAdapter, /sandbox\.mkDir\('remotion-bundle'\)/);
   for (const id of ['GhaithVertical', 'GhaithLandscape', 'GhaithSquare', 'GhaithPortrait', 'GhaithPinterest']) {
