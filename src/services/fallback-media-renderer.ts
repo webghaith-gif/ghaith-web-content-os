@@ -34,7 +34,7 @@ export async function renderFallbackMedia(content: ContentItem): Promise<Rendere
   for (let index = 0; index < 5; index += 1) {
     const slide = slides[index] ?? {};
     const points = Array.isArray(slide.points) ? slide.points.filter(Boolean).slice(0, 4) : [];
-    const body = [slide.body ?? '', ...points.map((x) => `\u200F${x} •`)].filter(Boolean).join('\n');
+    const body = [slide.body ?? '', ...points.map((x) => `\u200F• ${x}`)].filter(Boolean).join('\n');
     carouselSlides.push(await renderPng({
       width: 1080,
       height: 1350,
@@ -217,7 +217,13 @@ async function makeVideo(frames: Uint8Array[]) {
 }
 
 function safeVisualText(value: string) {
-  const normalized = String(value ?? '').normalize('NFKC').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ' ').trim();
+  const normalized = String(value ?? '')
+    .normalize('NFKC')
+    .replace(/\p{Extended_Pictographic}[\uFE0E\uFE0F]?/gu, ' ')
+    .replace(/[\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\u200D\uFE0E\uFE0F]/gu, '')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ' ')
+    .replace(/[^\S\r\n]+/g, ' ')
+    .trim();
   if (/[\uFFFD\u25A0-\u25A2\u25A4-\u25A9\u25AB\u25AD-\u25B1]/u.test(normalized)) {
     throw new Error('Visual asset rejected: the source text contains replacement or missing-glyph boxes.');
   }
