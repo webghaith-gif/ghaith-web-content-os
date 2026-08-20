@@ -6,6 +6,7 @@ import { createDatabase } from './repositories/database-factory';
 import { SearchConsoleAdapter } from './integrations/search-console.adapter';
 import { safeStartupDiagnostic } from './utils/startup-diagnostic';
 
+// Search Console routes intentionally share the existing Google OAuth token store.
 function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
