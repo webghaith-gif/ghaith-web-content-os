@@ -414,6 +414,7 @@ const staticFiles: Record<string, { file: string; type: string }> = {
   '/manifest.webmanifest': { file: 'manifest.webmanifest', type: 'application/manifest+json; charset=utf-8' },
   '/sw.js': { file: 'sw.js', type: 'text/javascript; charset=utf-8' },
   '/icon.svg': { file: 'icon.svg', type: 'image/svg+xml; charset=utf-8' },
+  '/google93eada78eb240e09.html': { file: 'google93eada78eb240e09.html', type: 'text/html; charset=utf-8' },
 };
 
 function isStaticPath(pathname: string) { return Object.prototype.hasOwnProperty.call(staticFiles, pathname); }
