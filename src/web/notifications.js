@@ -93,3 +93,158 @@
 
   window.addEventListener('DOMContentLoaded',init);
 })();
+
+(()=>{
+  const TARGET_SITE='https://ghaith-web-content-os.vercel.app/';
+  const external={
+    'Google Trends':'https://trends.google.com/explore',
+    'Make':'https://www.make.com/en/login',
+    'Canva':'https://www.canva.com/',
+    'HeyGen':'https://app.heygen.com/',
+    'Google Search Console':`https://search.google.com/search-console?resource_id=${encodeURIComponent(TARGET_SITE)}`,
+  };
+  const testRoutes={
+    'Gemini Automation':'/api/integrations/openai/test',
+    'ClickUp':'/api/integrations/clickup/test',
+    'Google Drive':'/api/integrations/google-drive/test',
+    'Canva':'/api/integrations/canva/test',
+    'HeyGen':'/api/integrations/heygen/test',
+    'Remotion':'/api/integrations/remotion/test',
+    'Google Search Console':'/api/integrations/search-console/test',
+  };
+
+  function notify(message,type='success'){
+    if(typeof window.toast==='function')return window.toast(message,type);
+    const host=document.getElementById('toastHost');
+    if(!host)return alert(message);
+    const el=document.createElement('div');
+    el.className=`toast ${type}`;el.textContent=message;host.appendChild(el);setTimeout(()=>el.remove(),4200);
+  }
+  async function json(path){
+    const res=await fetch(path,{cache:'no-store',headers:{Accept:'application/json'}});
+    let data={};try{data=await res.json()}catch{}
+    if(!res.ok)throw new Error(data.message||`HTTP ${res.status}`);
+    return data;
+  }
+  function openExternal(url){window.open(url,'_blank','noopener,noreferrer');}
+
+  async function runIntegration(name){
+    try{
+      if(name==='Google Trends'){openExternal(external[name]);return;}
+      if(name==='Make'){openExternal(external[name]);return;}
+      if(name==='Google Search Console'){
+        const probe=await json(testRoutes[name]);
+        if(!probe.connected)throw new Error(probe.message||'Search Console غير متصل.');
+        openExternal(external[name]);return;
+      }
+      if(name==='Google Drive'){
+        const probe=await json(testRoutes[name]);
+        if(!probe.ok)throw new Error(probe.message||'Google Drive غير متصل.');
+        if(probe.folderId)openExternal(`https://drive.google.com/drive/folders/${encodeURIComponent(probe.folderId)}`);
+        else notify('Google Drive متصل ويعمل بنجاح.');
+        return;
+      }
+      if(name==='ClickUp'){
+        const probe=await json(testRoutes[name]);
+        if(!probe.ok)throw new Error(probe.message||'ClickUp غير متصل.');
+        openExternal('https://app.clickup.com/');return;
+      }
+      if(name==='Canva'){
+        const probe=await json(testRoutes[name]);
+        if(!probe.ok)throw new Error(probe.message||'Canva يحتاج إعدادًا.');
+        openExternal(external[name]);return;
+      }
+      if(name==='HeyGen'){
+        const probe=await json(testRoutes[name]);
+        if(!probe.ok)throw new Error(probe.message||'HeyGen يحتاج إعدادًا.');
+        openExternal(external[name]);return;
+      }
+      if(name==='Gemini Automation'){
+        const probe=await json(testRoutes[name]);
+        notify(probe.ok?`Gemini Automation جاهز${probe.model?` — ${probe.model}`:''}`:(probe.message||'Gemini غير جاهز.'),probe.ok?'success':'error');return;
+      }
+      if(name==='Remotion'){
+        const probe=await json(testRoutes[name]);
+        notify(probe.ok?'Remotion جاهز للرندر داخل Ghaith Web Content OS.':(probe.message||'Remotion غير جاهز.'),probe.ok?'success':'error');return;
+      }
+      if(typeof window.switchView==='function')window.switchView('integrations');
+    }catch(error){notify(error.message||String(error),'error');}
+  }
+
+  function integrationName(el){
+    const cardTitle=el.querySelector?.('h3')?.textContent?.trim();
+    if(cardTitle)return cardTitle;
+    const rowTitle=el.querySelector?.('span')?.textContent?.trim();
+    return rowTitle||'';
+  }
+  function wire(el){
+    if(!el||el.dataset.integrationWired==='1')return;
+    const name=integrationName(el);if(!name)return;
+    el.dataset.integrationWired='1';el.dataset.integrationName=name;
+    el.classList.add('integration-clickable');el.setAttribute('role','button');el.setAttribute('tabindex','0');
+    el.setAttribute('aria-label',`فتح ${name}`);
+    el.addEventListener('click',event=>{
+      if(event.target.closest('a,button,input,select,textarea'))return;
+      runIntegration(name);
+    });
+    el.addEventListener('keydown',event=>{
+      if(event.key==='Enter'||event.key===' '){event.preventDefault();runIntegration(name);}
+    });
+  }
+  function wireAll(){
+    document.querySelectorAll('#integrationGrid .integration-card,#integrationMini .row').forEach(wire);
+  }
+  async function syncSearchConsoleBadge(){
+    try{
+      const probe=await json('/api/integrations/search-console/test');
+      document.querySelectorAll('[data-search-console-card],[data-search-console-mini]').forEach(el=>{
+        const badge=el.querySelector('.pill-on,.pill-off,.pill-manual');if(!badge)return;
+        badge.className=probe.connected?'pill-on':'pill-off';
+        badge.textContent=probe.connected?(el.hasAttribute('data-search-console-mini')?'جاهز':'متصل'):(el.hasAttribute('data-search-console-mini')?'غير مضبوط':'يحتاج إعداد');
+      });
+    }catch{}
+  }
+
+  function injectStyle(){
+    if(document.getElementById('integrationInteractionStyles'))return;
+    const style=document.createElement('style');style.id='integrationInteractionStyles';style.textContent=`
+      #integrationGrid .integration-clickable,#integrationMini .integration-clickable{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,background-color .16s ease,border-color .16s ease;outline:none}
+      #integrationGrid .integration-clickable:hover,#integrationGrid .integration-clickable:focus-visible{transform:translateY(-2px);box-shadow:0 15px 34px rgba(11,31,58,.13);border-color:#d6c59e}
+      #integrationMini .row.integration-clickable{margin:0 -6px;padding:10px 6px;border-radius:10px;align-items:center}
+      #integrationMini .row.integration-clickable:hover,#integrationMini .row.integration-clickable:focus-visible{background:#faf6ee}
+      #integrationMini .row.integration-clickable::after{content:'‹';color:#a27b27;font-size:19px;font-weight:900;margin-inline-start:4px}
+      #integrationGrid .integration-clickable::after{content:'فتح ›';display:block;margin-top:12px;color:#8a6820;font-size:11px;font-weight:900}
+      .sidebar-scrim{display:none}
+      @media(max-width:980px){
+        .sidebar-scrim{display:block;position:fixed;inset:0;background:rgba(3,14,28,.34);backdrop-filter:blur(1px);z-index:29;opacity:0;pointer-events:none;transition:opacity .2s ease}
+        .sidebar-scrim.show{opacity:1;pointer-events:auto}
+        body.sidebar-open{overflow:hidden}
+      }
+    `;document.head.appendChild(style);
+  }
+
+  function initSidebarOutsideClose(){
+    const sidebar=document.getElementById('sidebar'),menu=document.getElementById('menuBtn');if(!sidebar)return;
+    let scrim=document.querySelector('.sidebar-scrim');
+    if(!scrim){scrim=document.createElement('div');scrim.className='sidebar-scrim';scrim.setAttribute('aria-hidden','true');document.body.appendChild(scrim);}
+    const sync=()=>{const open=sidebar.classList.contains('open')&&innerWidth<=980;scrim.classList.toggle('show',open);document.body.classList.toggle('sidebar-open',open);};
+    const close=()=>{sidebar.classList.remove('open');sync();};
+    new MutationObserver(sync).observe(sidebar,{attributes:true,attributeFilter:['class']});
+    scrim.addEventListener('click',close);
+    document.addEventListener('pointerdown',event=>{
+      if(innerWidth>980||!sidebar.classList.contains('open'))return;
+      if(sidebar.contains(event.target)||menu?.contains(event.target))return;
+      close();
+    });
+    document.addEventListener('keydown',event=>{if(event.key==='Escape')close();});
+    window.addEventListener('resize',sync);sync();
+  }
+
+  window.addEventListener('DOMContentLoaded',()=>{
+    injectStyle();initSidebarOutsideClose();wireAll();syncSearchConsoleBadge();
+    const grid=document.getElementById('integrationGrid'),mini=document.getElementById('integrationMini');
+    const observer=new MutationObserver(()=>{wireAll();syncSearchConsoleBadge();});
+    if(grid)observer.observe(grid,{childList:true,subtree:true});
+    if(mini)observer.observe(mini,{childList:true,subtree:true});
+  });
+})();
