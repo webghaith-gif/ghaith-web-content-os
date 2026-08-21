@@ -1,8 +1,28 @@
-const CACHE='ghaith-web-content-os-v8';
-const STATIC=['/','/styles.css?v=8','/app.js?v=8','/linkify.js?v=8','/notifications.js?v=8','/manifest.webmanifest','/icon.svg'];
-self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(STATIC)).then(()=>self.skipWaiting())));
-self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
-self.addEventListener('fetch',e=>{if(e.request.method!=='GET'||new URL(e.request.url).pathname.startsWith('/api/'))return;e.respondWith(fetch(e.request).then(r=>{const copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy));return r}).catch(()=>caches.match(e.request)))});
+const CACHE='ghaith-web-content-os-v9';
+const STATIC=['/','/styles.css?v=9','/app.js?v=9','/notifications.js?v=9','/manifest.webmanifest','/icon.svg'];
+self.addEventListener('install',event=>{
+  event.waitUntil((async()=>{
+    const cache=await caches.open(CACHE);
+    await Promise.all(STATIC.map(async url=>{
+      try{
+        const response=await fetch(url,{cache:'no-cache'});
+        if(response.ok)await cache.put(url,response.clone());
+      }catch{}
+    }));
+    await self.skipWaiting();
+  })());
+});
+self.addEventListener('activate',event=>event.waitUntil(
+  caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())
+));
+self.addEventListener('fetch',event=>{
+  if(event.request.method!=='GET'||new URL(event.request.url).pathname.startsWith('/api/'))return;
+  event.respondWith(fetch(event.request).then(response=>{
+    const copy=response.clone();
+    caches.open(CACHE).then(cache=>cache.put(event.request,copy));
+    return response;
+  }).catch(()=>caches.match(event.request)));
+});
 self.addEventListener('push',event=>{
   let data={title:'غيث ويب',body:'لديك تحديث جديد.',url:'/',tag:'ghaith-web-content-os',icon:'/icon.svg',badge:'/icon.svg'};
   try{if(event.data)data={...data,...event.data.json()}}catch{if(event.data)data.body=event.data.text()}
