@@ -297,9 +297,18 @@ export function createApp() {
         return sendJson(res, 200, await reportArchive.archivePending(Number.isFinite(requested) ? requested : 5));
       }
       if (url.pathname === '/api/opportunities' && method === 'GET') return sendJson(res, 200, await store.listOpportunities());
-      if (url.pathname === '/api/content' && method === 'GET') return sendJson(res, 200, await store.listContents());
-      if (url.pathname === '/api/logs' && method === 'GET') return sendJson(res, 200, await store.listLogs());
-      if (url.pathname === '/api/metrics' && method === 'GET') return sendJson(res, 200, await metrics.get());
+      if (url.pathname === '/api/content' && method === 'GET') {
+        await publishing.reconcileClickUpWatchResults();
+        return sendJson(res, 200, await store.listContents());
+      }
+      if (url.pathname === '/api/logs' && method === 'GET') {
+        await publishing.reconcileClickUpWatchResults();
+        return sendJson(res, 200, await store.listLogs());
+      }
+      if (url.pathname === '/api/metrics' && method === 'GET') {
+        await publishing.reconcileClickUpWatchResults();
+        return sendJson(res, 200, await metrics.get());
+      }
       if (url.pathname === '/api/platforms' && method === 'GET') return sendJson(res, 200, { platforms: platforms.list() });
 
       let match = url.pathname.match(/^\/api\/reports\/([^/]+)\/opportunities$/);
@@ -325,7 +334,10 @@ export function createApp() {
       }
 
       match = url.pathname.match(/^\/api\/content\/([^/]+)$/);
-      if (match && method === 'GET') return sendJson(res, 200, await store.getContent(match[1]!));
+      if (match && method === 'GET') {
+        await publishing.reconcileClickUpWatchResults();
+        return sendJson(res, 200, await store.getContent(match[1]!));
+      }
       if (match && method === 'PATCH') {
         const current = await store.getContent(match[1]!);
         if (current.status === 'PUBLISHED' || current.status === 'ARCHIVED') throw new AppError('Published/archived content is read-only.', 409, 'LOCKED_CONTENT');
