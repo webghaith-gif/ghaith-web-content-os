@@ -69,14 +69,25 @@ export class PostgresDb implements DatabaseBackend {
     this.cacheExpiresAt = Date.now() + READ_CACHE_TTL_MS;
   }
 
+  private async queryState(): Promise<DatabaseShape> {
+    const result = await this.pool.query<{ state: DatabaseShape }>('SELECT state FROM ghaith_web_state WHERE id = 1');
+    return result.rows[0] ? normalizeDb(result.rows[0].state) : emptyDb();
+  }
+
+  async readFresh(): Promise<DatabaseShape> {
+    await this.ensureInitialized();
+    const state = await this.queryState();
+    this.updateCache(state);
+    return state;
+  }
+
   async read(): Promise<DatabaseShape> {
     await this.ensureInitialized();
     if (this.cachedState && Date.now() < this.cacheExpiresAt) return this.cachedState;
     if (this.readInFlight) return this.readInFlight;
 
     this.readInFlight = (async () => {
-      const result = await this.pool.query<{ state: DatabaseShape }>('SELECT state FROM ghaith_web_state WHERE id = 1');
-      const state = result.rows[0] ? normalizeDb(result.rows[0].state) : emptyDb();
+      const state = await this.queryState();
       this.updateCache(state);
       return state;
     })().finally(() => {
