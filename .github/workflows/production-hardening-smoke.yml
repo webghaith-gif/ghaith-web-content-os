@@ -1,0 +1,95 @@
+name: Production Hardening Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vercel.json'
+      - '.github/workflows/production-hardening-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-hardening-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for production rollout
+        run: sleep 45
+
+      - name: Verify production shell and static assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://ghaith-web-content-os.vercel.app'
+          html="$(curl --retry 3 --retry-all-errors -fsS "$base/")"
+          printf '%s' "$html" | grep -q 'GHAITH WEB CONTENT OS'
+          printf '%s' "$html" | grep -q 'id="publishMode"'
+          printf '%s' "$html" | grep -q 'id="metricsGrid"'
+
+          assets="$(printf '%s' "$html" | grep -oE '(src|href)="/[^"]+"' | sed -E 's/^(src|href)="//;s/"$//' | sort -u)"
+          while IFS= read -r asset; do
+            [ -z "$asset" ] && continue
+            curl --retry 3 --retry-all-errors -fsS -o /dev/null "$base$asset"
+          done <<< "$assets"
+
+          curl --retry 3 --retry-all-errors -fsS -o /dev/null "$base/sw.js"
+
+      - name: Verify core read APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://ghaith-web-content-os.vercel.app'
+          endpoints=(
+            '/api/health'
+            '/api/system'
+            '/api/metrics'
+            '/api/reports'
+            '/api/opportunities'
+            '/api/content'
+            '/api/logs'
+          )
+          for endpoint in "${endpoints[@]}"; do
+            echo "Checking $endpoint"
+            curl --retry 3 --retry-all-errors -fsS -o /dev/null "$base$endpoint"
+          done
+
+      - name: Verify critical integrations without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://ghaith-web-content-os.vercel.app'
+          endpoints=(
+            '/api/integrations/openai/test'
+            '/api/integrations/clickup/test'
+            '/api/integrations/make/test'
+            '/api/integrations/google-drive/status'
+            '/api/integrations/google-drive/test'
+            '/api/integrations/search-console/test'
+          )
+          for endpoint in "${endpoints[@]}"; do
+            echo "Checking $endpoint"
+            body="$(curl --retry 3 --retry-all-errors -fsS "$base$endpoint")"
+            printf '%s' "$body" | grep -Eq '"ok":true|"connected":true'
+          done
+
+      - name: Report optional integration state
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://ghaith-web-content-os.vercel.app'
+          canva="$(curl -sS "$base/api/integrations/canva/status" || true)"
+          echo "Canva status: $canva"
+          if printf '%s' "$canva" | grep -q '"connected":false'; then
+            echo '::warning::Canva OAuth is configured but not currently authorized.'
+          fi
