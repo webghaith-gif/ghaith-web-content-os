@@ -134,6 +134,7 @@
       if(name==='Make'){openExternal(external[name]);return;}
       if(name==='Google Search Console'){
         const probe=await json(testRoutes[name]);
+        window.__searchConsoleProbe=probe;
         if(!probe.connected)throw new Error(probe.message||'Search Console غير متصل.');
         openExternal(external[name]);return;
       }
@@ -194,9 +195,20 @@
   function wireAll(){
     document.querySelectorAll('#integrationGrid .integration-card,#integrationMini .row').forEach(wire);
   }
+
+  let searchConsoleProbePromise=null;
+  async function getSearchConsoleProbe(){
+    if(window.__searchConsoleProbe)return window.__searchConsoleProbe;
+    if(!searchConsoleProbePromise){
+      searchConsoleProbePromise=json('/api/integrations/search-console/test')
+        .then(probe=>{window.__searchConsoleProbe=probe;return probe;})
+        .finally(()=>{searchConsoleProbePromise=null;});
+    }
+    return searchConsoleProbePromise;
+  }
   async function syncSearchConsoleBadge(){
     try{
-      const probe=await json('/api/integrations/search-console/test');
+      const probe=await getSearchConsoleProbe();
       document.querySelectorAll('[data-search-console-card],[data-search-console-mini]').forEach(el=>{
         const badge=el.querySelector('.pill-on,.pill-off,.pill-manual');if(!badge)return;
         const className=probe.connected?'pill-on':'pill-off';
