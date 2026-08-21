@@ -4,6 +4,7 @@ import { env } from './config/env';
 import { Store } from './repositories/store';
 import { createDatabase } from './repositories/database-factory';
 import { SearchConsoleAdapter } from './integrations/search-console.adapter';
+import { MakeAdapter } from './integrations/make.adapter';
 import { safeStartupDiagnostic } from './utils/startup-diagnostic';
 
 // Search Console routes intentionally share the existing Google OAuth token store.
@@ -19,11 +20,26 @@ try {
   const app = createApp();
   const baseHandler = app.listeners('request')[0] as ((req: IncomingMessage, res: ServerResponse) => void | Promise<void>) | undefined;
   const searchConsole = new SearchConsoleAdapter(new Store(createDatabase()));
+  const make = new MakeAdapter();
 
   if (baseHandler) {
     app.removeAllListeners('request');
     app.on('request', async (req: IncomingMessage, res: ServerResponse) => {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+
+      if (req.method === 'GET' && url.pathname === '/api/integrations/make/test') {
+        try {
+          const probe = await make.testConnection();
+          return sendJson(res, probe.ok ? 200 : 503, probe);
+        } catch (error) {
+          return sendJson(res, 500, {
+            ok: false,
+            enabled: make.enabled,
+            mode: make.enabled ? 'webhook' : 'disabled',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
 
       if (req.method === 'GET' && url.pathname === '/api/integrations/search-console/test') {
         try {
