@@ -164,6 +164,86 @@ export class PublishingOrchestrator {
     return { contentId, published: livePublished, dryRun: hadDryRun, mode: 'webhook', results };
   }
 
+  /**
+   * Reconcile the canonical app state with the fixed Make Watch Tasks workflow.
+   *
+   * In clickup_watch mode Make owns the final external publish step and marks each
+   * platform task `published`. This method treats that ClickUp status as the
+   * durable acknowledgement, mirrors SUCCESS logs into the app, and promotes the
+   * content to PUBLISHED only after every target platform task is published.
+   * Transient ClickUp read failures are reported but never corrupt local state.
+   */
+  async reconcileClickUpWatchResults() {
+    if (env.PUBLISH_MODE !== 'clickup_watch' || !this.clickup.enabled) {
+      return { checkedTasks: 0, publishedContents: 0, syncedLogs: 0, failures: [] as string[] };
+    }
+
+    const candidates = (await this.store.listContents()).filter((content) =>
+      content.status === 'READY'
+      && Boolean(content.clickupTaskId || Object.keys(content.clickupTaskIds ?? {}).length),
+    );
+
+    let checkedTasks = 0;
+    let publishedContents = 0;
+    let syncedLogs = 0;
+    const failures: string[] = [];
+    const expectedStatus = env.CLICKUP_STATUS_PUBLISHED.trim().toLowerCase();
+
+    for (const content of candidates) {
+      const targets = [...new Set(content.platforms.map((platform) => platform.trim().toLowerCase()).filter(Boolean))];
+      if (targets.length === 0) continue;
+
+      let allPublished = true;
+      for (const platform of targets) {
+        const taskId = reconciliationTaskId(content, platform, targets.length);
+        if (!taskId) {
+          allPublished = false;
+          failures.push(`${content.id}:${platform}:missing-task`);
+          continue;
+        }
+
+        try {
+          const task = await this.clickup.getTask(taskId);
+          checkedTasks += 1;
+          const rawStatus = typeof task?.status === 'string' ? task.status : task?.status?.status;
+          const isPublished = rawStatus?.trim().toLowerCase() === expectedStatus;
+          if (!isPublished) {
+            allPublished = false;
+            continue;
+          }
+
+          const key = idempotencyKey(content.id, platform, content.revision);
+          const previous = await this.store.findSuccessfulLog(key);
+          if (!previous) {
+            await this.store.addLog({
+              contentId: content.id,
+              platform,
+              result: 'SUCCESS',
+              originalTaskId: taskId,
+              attempt: 1,
+              processed: true,
+              idempotencyKey: key,
+            });
+            syncedLogs += 1;
+          }
+        } catch (error) {
+          allPublished = false;
+          failures.push(`${content.id}:${platform}:${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+
+      if (allPublished) {
+        await this.store.updateContent(content.id, {
+          status: 'PUBLISHED',
+          publishedAt: content.publishedAt ?? new Date().toISOString(),
+        });
+        publishedContents += 1;
+      }
+    }
+
+    return { checkedTasks, publishedContents, syncedLogs, failures };
+  }
+
   async recordMakeResult(input: {
     contentId: string;
     platform: string;
@@ -212,6 +292,10 @@ function idempotencyKey(contentId: string, platform: string, revision: number): 
 
 function platformTaskId(content: ContentItem, platform: string): string | undefined {
   return content.clickupTaskIds?.[platform.toLowerCase()] ?? content.clickupTaskId;
+}
+
+function reconciliationTaskId(content: ContentItem, platform: string, targetCount: number): string | undefined {
+  return content.clickupTaskIds?.[platform.toLowerCase()] ?? (targetCount === 1 ? content.clickupTaskId : undefined);
 }
 
 async function markClickUpTasksPublished(content: ContentItem, clickup: ClickUpAdapter): Promise<void> {
