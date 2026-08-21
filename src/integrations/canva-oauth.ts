@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { env } from '../config/env';
+import { PostgresDb } from '../repositories/postgres-db';
+import { PersistentCanvaStore } from '../repositories/persistent-canva-store';
 import type { Store } from '../repositories/store';
 
 interface CanvaTokenResponse {
@@ -10,7 +12,20 @@ interface CanvaTokenResponse {
 }
 
 export class CanvaOAuthManager {
-  constructor(private readonly store: Store) {}
+  private readonly store: Store;
+
+  constructor(legacyStore: Store) {
+    this.store = env.GOOGLE_DRIVE_STATE_DATABASE_URL
+      ? new PersistentCanvaStore(
+          new PostgresDb(
+            env.GOOGLE_DRIVE_STATE_DATABASE_URL,
+            env.DATABASE_SSL,
+            env.DATABASE_SSL_REJECT_UNAUTHORIZED,
+          ),
+          legacyStore,
+        )
+      : legacyStore;
+  }
 
   get configured(): boolean {
     return Boolean(env.CANVA_CLIENT_ID && env.CANVA_CLIENT_SECRET);
