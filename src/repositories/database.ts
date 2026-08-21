@@ -76,6 +76,7 @@ export interface DatabaseShape {
 
 export interface DatabaseBackend {
   read(): Promise<DatabaseShape>;
+  readFresh?(): Promise<DatabaseShape>;
   mutate<T>(fn: (db: DatabaseShape) => T | Promise<T>): Promise<T>;
 }
 
