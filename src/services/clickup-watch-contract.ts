@@ -37,7 +37,7 @@ export function buildClickUpWatchPlans(content: ContentItem): ClickUpWatchPlan[]
       );
     }
 
-    const asset = content.assets.find((candidate) => candidate.kind === contract.mediaKind && Boolean(candidate.url?.trim()));
+    const asset = preferredPublishingAsset(content.assets, contract.mediaKind);
     if (!asset) {
       throw new AppError(
         `${platform} requires one ${contract.mediaKind} attachment before READY.`,
@@ -55,13 +55,31 @@ export function buildClickUpWatchPlans(content: ContentItem): ClickUpWatchPlan[]
     return {
       platform,
       finalName: `${contract.prefix} ${platformTitle || content.title}`,
-      // Make currently routes by [FB]/[IG]/[TT]/[PIN]/[YT], so a HOLD task must never contain those prefixes.
       holdName: `[GW-HOLD] ${platform.toUpperCase()} — ${platformTitle || content.title}`,
       description,
       asset,
       fileName: assetFileName(asset, contract.mediaKind, platform),
     };
   });
+}
+
+function preferredPublishingAsset(assets: AssetRef[], mediaKind: 'image' | 'video'): AssetRef | undefined {
+  const candidates = assets.filter((candidate) => candidate.kind === mediaKind && Boolean(candidate.url?.trim()));
+
+  // Generated binaries are stored privately in Drive. providerId is the Drive file ID
+  // for google-drive and remotion assets, so the publisher can download them with OAuth.
+  const driveBacked = candidates.find((candidate) =>
+    Boolean(candidate.providerId)
+    && (candidate.provider === 'google-drive' || candidate.provider === 'remotion'),
+  );
+  if (driveBacked) return driveBacked;
+
+  // HeyGen and explicit external URLs are expected to be directly downloadable.
+  const direct = candidates.find((candidate) => candidate.provider === 'heygen' || candidate.provider === 'external');
+  if (direct) return direct;
+
+  // Legacy assets without provider metadata may still be direct binary URLs.
+  return candidates.find((candidate) => !candidate.provider);
 }
 
 function platformDescription(content: ContentItem, platform: string): string {
@@ -113,7 +131,7 @@ function assetFileName(asset: AssetRef, mediaKind: 'image' | 'video', platform: 
     const raw = decodeURIComponent(pathname.split('/').filter(Boolean).pop() ?? '');
     if (/\.[A-Za-z0-9]{2,5}$/.test(raw)) return raw;
   } catch {
-    // The URL itself is validated/fetched by the ClickUp adapter; use a safe filename fallback here.
+    // Use a safe filename fallback below.
   }
   return `ghaith-web-${platform}.${mediaKind === 'video' ? 'mp4' : 'jpg'}`;
 }
