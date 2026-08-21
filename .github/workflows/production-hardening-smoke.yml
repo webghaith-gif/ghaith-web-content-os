@@ -58,13 +58,28 @@ jobs:
             '/api/opportunities'
             '/api/content'
             '/api/logs'
+            '/api/integrations'
           )
           for endpoint in "${endpoints[@]}"; do
             echo "Checking $endpoint"
             curl --retry 3 --retry-all-errors -fsS -o /dev/null "$base$endpoint"
           done
 
-      - name: Verify critical integrations without writes
+      - name: Report integration state without external API probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://ghaith-web-content-os.vercel.app'
+          integrations="$(curl --retry 3 --retry-all-errors -fsS "$base/api/integrations")"
+          printf '%s\n' "$integrations"
+          printf '%s' "$integrations" | grep -q '"GoogleDrive"'
+          printf '%s' "$integrations" | grep -q '"ClickUp"'
+          if printf '%s' "$integrations" | grep -q '"Canva".*"connected":false'; then
+            echo '::warning::Canva OAuth is configured but not currently authorized.'
+          fi
+
+      - name: Run live integration probes only when started manually
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail
@@ -82,14 +97,3 @@ jobs:
             body="$(curl --retry 3 --retry-all-errors -fsS "$base$endpoint")"
             printf '%s' "$body" | grep -Eq '"ok":true|"connected":true'
           done
-
-      - name: Report optional integration state
-        shell: bash
-        run: |
-          set -euo pipefail
-          base='https://ghaith-web-content-os.vercel.app'
-          canva="$(curl -sS "$base/api/integrations/canva/status" || true)"
-          echo "Canva status: $canva"
-          if printf '%s' "$canva" | grep -q '"connected":false'; then
-            echo '::warning::Canva OAuth is configured but not currently authorized.'
-          fi
