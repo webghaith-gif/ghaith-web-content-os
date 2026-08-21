@@ -8,6 +8,11 @@ import { fetchJson } from '../utils/http';
  * The class keeps its historical name so existing imports do not break, but the
  * configured endpoint is now vendor-neutral: Make, n8n, or any compatible HTTP
  * workflow can receive the same normalized publishing payload.
+ *
+ * When a webhook secret is configured we send both the vendor-neutral
+ * X-Ghaith-Webhook-Secret header and Make's x-make-apikey header. This keeps
+ * existing receivers compatible while allowing a Make Custom Webhook protected
+ * with API Key authentication to accept the same secret.
  */
 export class MakeAdapter {
   get enabled() { return Boolean(env.PUBLISH_WEBHOOK_URL); }
@@ -28,7 +33,12 @@ export class MakeAdapter {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(env.PUBLISH_WEBHOOK_SECRET ? { 'X-Ghaith-Webhook-Secret': env.PUBLISH_WEBHOOK_SECRET } : {}),
+          ...(env.PUBLISH_WEBHOOK_SECRET
+            ? {
+                'X-Ghaith-Webhook-Secret': env.PUBLISH_WEBHOOK_SECRET,
+                'x-make-apikey': env.PUBLISH_WEBHOOK_SECRET,
+              }
+            : {}),
         },
         body: JSON.stringify(payload),
       },
