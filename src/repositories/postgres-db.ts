@@ -26,9 +26,14 @@ VALUES (1, $1::jsonb)
 ON CONFLICT (id) DO NOTHING
 `;
 
+const READ_CACHE_TTL_MS = 5 * 60 * 1000;
+
 export class PostgresDb implements DatabaseBackend {
   private readonly pool: PoolLike;
   private ready: Promise<void> | undefined;
+  private cachedState: DatabaseShape | undefined;
+  private cacheExpiresAt = 0;
+  private readInFlight: Promise<DatabaseShape> | undefined;
 
   constructor(connectionString: string, ssl: boolean, rejectUnauthorized = true, pool?: PoolLike) {
     if (!connectionString.trim()) throw new Error('DATABASE_URL is required for PostgreSQL storage.');
@@ -59,11 +64,26 @@ export class PostgresDb implements DatabaseBackend {
     return this.ready;
   }
 
+  private updateCache(state: DatabaseShape) {
+    this.cachedState = state;
+    this.cacheExpiresAt = Date.now() + READ_CACHE_TTL_MS;
+  }
+
   async read(): Promise<DatabaseShape> {
     await this.ensureInitialized();
-    const result = await this.pool.query<{ state: DatabaseShape }>('SELECT state FROM ghaith_web_state WHERE id = 1');
-    if (!result.rows[0]) return emptyDb();
-    return normalizeDb(result.rows[0].state);
+    if (this.cachedState && Date.now() < this.cacheExpiresAt) return this.cachedState;
+    if (this.readInFlight) return this.readInFlight;
+
+    this.readInFlight = (async () => {
+      const result = await this.pool.query<{ state: DatabaseShape }>('SELECT state FROM ghaith_web_state WHERE id = 1');
+      const state = result.rows[0] ? normalizeDb(result.rows[0].state) : emptyDb();
+      this.updateCache(state);
+      return state;
+    })().finally(() => {
+      this.readInFlight = undefined;
+    });
+
+    return this.readInFlight;
   }
 
   async mutate<T>(fn: (db: DatabaseShape) => T | Promise<T>): Promise<T> {
@@ -79,6 +99,7 @@ export class PostgresDb implements DatabaseBackend {
         [JSON.stringify(db)],
       );
       await client.query('COMMIT');
+      this.updateCache(db);
       return output;
     } catch (error) {
       try { await client.query('ROLLBACK'); } catch { /* keep original error */ }
@@ -89,6 +110,8 @@ export class PostgresDb implements DatabaseBackend {
   }
 
   async close(): Promise<void> {
+    this.cachedState = undefined;
+    this.cacheExpiresAt = 0;
     await this.pool.end();
   }
 }
