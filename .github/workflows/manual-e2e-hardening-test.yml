@@ -8,68 +8,110 @@ on:
       - '.hardening/e2e-trigger.txt'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Run production workflow through ClickUp READY
+      - name: Run production end-to-end hardening test
+        id: e2e
+        shell: bash
+        run: |
+          set -uo pipefail
+          base='https://ghaith-web-content-os.vercel.app'
+          mkdir -p .hardening
+          result='STARTED'
+          report_id=''
+          opportunity_id=''
+          content_id=''
+          task_id=''
+          asset_count=0
+          content_status=''
+
+          write_result() {
+            jq -n \
+              --arg result "$result" \
+              --arg reportId "$report_id" \
+              --arg opportunityId "$opportunity_id" \
+              --arg contentId "$content_id" \
+              --arg clickupTaskId "$task_id" \
+              --arg contentStatus "$content_status" \
+              --argjson assetCount "${asset_count:-0}" \
+              '{result:$result,reportId:$reportId,opportunityId:$opportunityId,contentId:$contentId,clickupTaskId:$clickupTaskId,contentStatus:$contentStatus,assetCount:$assetCount,updatedAt:(now|todate)}' > .hardening/e2e-result.json
+          }
+          trap write_result EXIT
+
+          report_payload='{"title":"[E2E TEST] Ghaith Web Content OS — 21 Aug 2026","source":"Hardening Test","body":"اختبار تقني داخلي لمنظومة Ghaith Web Content OS. الهدف الوحيد هو التحقق من المسار: تقرير ثم فرصة ثم محتوى تعليمي غير ترويجي ثم أصول ثم مراجعة ثم READY ثم ClickUp ثم Make. يجب أن يكون المحتوى واضحًا بأنه اختبار تقني فقط، بلا بيع، بلا عروض، بلا أسعار، وبلا ادعاءات عن منتج."}'
+          report="$(curl --retry 3 --retry-all-errors -fsS -X POST "$base/api/reports" -H 'Content-Type: application/json' --data "$report_payload")" || { result='FAILED_REPORT'; exit 1; }
+          report_id="$(printf '%s' "$report" | jq -r '.id // empty')"
+          test -n "$report_id" || { result='FAILED_REPORT_ID'; exit 1; }
+          echo "REPORT_ID=$report_id"
+
+          opportunities="$(curl --retry 3 --retry-all-errors -fsS -X POST "$base/api/reports/$report_id/opportunities")" || { result='FAILED_OPPORTUNITIES'; exit 1; }
+          opportunity_id="$(printf '%s' "$opportunities" | jq -r '.[0].id // empty')"
+          test -n "$opportunity_id" || { result='FAILED_OPPORTUNITY_ID'; exit 1; }
+          echo "OPPORTUNITY_ID=$opportunity_id"
+
+          content="$(curl --retry 2 --retry-all-errors -fsS -X POST "$base/api/opportunities/$opportunity_id/content" -H 'Content-Type: application/json' --data '{"platforms":["tiktok"]}')" || { result='FAILED_CONTENT'; exit 1; }
+          content_id="$(printf '%s' "$content" | jq -r '.id // empty')"
+          test -n "$content_id" || { result='FAILED_CONTENT_ID'; exit 1; }
+          content_status="$(printf '%s' "$content" | jq -r '.status // empty')"
+          asset_count="$(printf '%s' "$content" | jq '[.assets[]?] | length')"
+          echo "CONTENT_ID=$content_id status=$content_status assets=$asset_count"
+
+          if [ "$asset_count" -eq 0 ] && [ "$content_status" != 'PUBLISHED' ]; then
+            content="$(curl --retry 2 --retry-all-errors -fsS -X POST "$base/api/content/$content_id/assets")" || { result='FAILED_ASSETS'; exit 1; }
+            asset_count="$(printf '%s' "$content" | jq '[.assets[]?] | length')"
+            content_status="$(printf '%s' "$content" | jq -r '.status // empty')"
+          fi
+          test "$asset_count" -gt 0 || { result='FAILED_NO_ASSETS'; exit 1; }
+
+          if [ "$content_status" = 'IN_REVIEW' ]; then
+            approved="$(curl --retry 3 --retry-all-errors -fsS -X POST "$base/api/content/$content_id/approve" -H 'Content-Type: application/json' --data '{"approvedBy":"Hardening E2E Test"}')" || { result='FAILED_APPROVAL'; exit 1; }
+            content_status="$(printf '%s' "$approved" | jq -r '.status // empty')"
+          fi
+
+          if [ "$content_status" = 'READY' ]; then
+            dispatched="$(curl --retry 3 --retry-all-errors -fsS -X POST "$base/api/content/$content_id/publish")" || { result='FAILED_DISPATCH'; exit 1; }
+            task_id="$(printf '%s' "$dispatched" | jq -r '.tasks[]? | select(.platform=="tiktok") | .taskId' | head -n1)"
+            dispatched_ok="$(printf '%s' "$dispatched" | jq -r '.dispatched // false')"
+            test "$dispatched_ok" = 'true' || { result='FAILED_NOT_DISPATCHED'; exit 1; }
+            test -n "$task_id" || { result='FAILED_TASK_ID'; exit 1; }
+            echo "CLICKUP_TASK_ID=$task_id"
+          elif [ "$content_status" = 'PUBLISHED' ]; then
+            current="$(curl --retry 2 --retry-all-errors -fsS "$base/api/content/$content_id")"
+            task_id="$(printf '%s' "$current" | jq -r '.clickupTaskIds.tiktok // .clickupTaskId // empty')"
+          else
+            result="FAILED_UNEXPECTED_STATUS_$content_status"
+            exit 1
+          fi
+
+          for attempt in 1 2 3 4 5; do
+            current="$(curl --retry 2 --retry-all-errors -fsS "$base/api/content/$content_id")" || { result='FAILED_POLL'; exit 1; }
+            content_status="$(printf '%s' "$current" | jq -r '.status // empty')"
+            if [ -z "$task_id" ]; then task_id="$(printf '%s' "$current" | jq -r '.clickupTaskIds.tiktok // .clickupTaskId // empty')"; fi
+            echo "POLL_$attempt status=$content_status task=$task_id"
+            if [ "$content_status" = 'PUBLISHED' ]; then
+              result='PUBLISHED'
+              exit 0
+            fi
+            sleep 60
+          done
+
+          result='DISPATCHED_WAITING_FOR_MAKE'
+          exit 0
+
+      - name: Commit test result to isolated branch
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
-          base='https://ghaith-web-content-os.vercel.app'
-
-          report_payload='{"title":"[E2E TEST] Ghaith Web Content OS — 21 Aug 2026","source":"Hardening Test","body":"اختبار تقني داخلي لمنظومة Ghaith Web Content OS. الهدف الوحيد هو التحقق من المسار: تقرير ثم فرصة ثم محتوى تعليمي غير ترويجي ثم أصول ثم مراجعة ثم READY ثم ClickUp ثم Make. يجب أن يكون المحتوى واضحًا بأنه اختبار تقني فقط، بلا بيع، بلا عروض، بلا أسعار، وبلا ادعاءات عن منتج."}'
-          report="$(curl --retry 3 --retry-all-errors -fsS -X POST "$base/api/reports" -H 'Content-Type: application/json' --data "$report_payload")"
-          report_id="$(printf '%s' "$report" | jq -r '.id')"
-          echo "REPORT_ID=$report_id"
-          test -n "$report_id" && test "$report_id" != null
-
-          opportunities="$(curl --retry 3 --retry-all-errors -fsS -X POST "$base/api/reports/$report_id/opportunities")"
-          opportunity_id="$(printf '%s' "$opportunities" | jq -r '.[0].id')"
-          echo "OPPORTUNITY_ID=$opportunity_id"
-          test -n "$opportunity_id" && test "$opportunity_id" != null
-
-          content="$(curl --retry 2 --retry-all-errors -fsS -X POST "$base/api/opportunities/$opportunity_id/content" -H 'Content-Type: application/json' --data '{"platforms":["tiktok"]}')"
-          content_id="$(printf '%s' "$content" | jq -r '.id')"
-          echo "CONTENT_ID=$content_id"
-          test -n "$content_id" && test "$content_id" != null
-
-          status="$(printf '%s' "$content" | jq -r '.status')"
-          test "$status" = 'IN_REVIEW'
-
-          asset_count="$(printf '%s' "$content" | jq '[.assets[]?] | length')"
-          if [ "$asset_count" -eq 0 ]; then
-            echo 'Automatic assets were empty; retrying asset generation once.'
-            content="$(curl --retry 2 --retry-all-errors -fsS -X POST "$base/api/content/$content_id/assets")"
-            asset_count="$(printf '%s' "$content" | jq '[.assets[]?] | length')"
-          fi
-          echo "ASSET_COUNT=$asset_count"
-          test "$asset_count" -gt 0
-
-          approved="$(curl --retry 3 --retry-all-errors -fsS -X POST "$base/api/content/$content_id/approve" -H 'Content-Type: application/json' --data '{"approvedBy":"Hardening E2E Test"}')"
-          test "$(printf '%s' "$approved" | jq -r '.status')" = 'READY'
-
-          dispatched="$(curl --retry 3 --retry-all-errors -fsS -X POST "$base/api/content/$content_id/publish")"
-          printf '%s\n' "$dispatched" | jq .
-          test "$(printf '%s' "$dispatched" | jq -r '.dispatched')" = 'true'
-          task_id="$(printf '%s' "$dispatched" | jq -r '.tasks[] | select(.platform=="tiktok") | .taskId')"
-          echo "CLICKUP_TASK_ID=$task_id"
-          test -n "$task_id" && test "$task_id" != null
-
-          echo 'Waiting briefly for Make Watch Tasks to process the READY task.'
-          for attempt in 1 2 3 4 5; do
-            sleep 60
-            current="$(curl --retry 2 --retry-all-errors -fsS "$base/api/content/$content_id")"
-            current_status="$(printf '%s' "$current" | jq -r '.status')"
-            echo "POLL_$attempt status=$current_status"
-            if [ "$current_status" = 'PUBLISHED' ]; then
-              echo 'E2E_RESULT=PUBLISHED'
-              exit 0
-            fi
-          done
-
-          echo 'E2E_RESULT=DISPATCHED_WAITING_FOR_MAKE'
-          exit 0
+          test -f .hardening/e2e-result.json || printf '%s\n' '{"result":"WORKFLOW_FAILED_BEFORE_RESULT"}' > .hardening/e2e-result.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .hardening/e2e-result.json
+          git diff --cached --quiet && exit 0
+          git commit -m 'test: record e2e hardening result'
+          git push origin HEAD:hardening-e2e-20260821
