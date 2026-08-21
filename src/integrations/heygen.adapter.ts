@@ -82,7 +82,7 @@ export class HeyGenAdapter {
 function webhookHeaders(): Record<string, string> {
   return {
     'Content-Type': 'application/json',
-    ...(env.HEYGEN_AUTOMATION_WEBHOOK_SECRET ? { 'X-Ghaith-Webhook-Secret': env.HEYGEN_AUTOMATION_WEBHOOK_SECRET } : {}),
+    ...(env.HEYGEN_AUTOMATION_WEBHOOK_SECRET ? { 'x-make-apikey': env.HEYGEN_AUTOMATION_WEBHOOK_SECRET } : {}),
   };
 }
 
