@@ -1,5 +1,5 @@
-const CACHE='ghaith-web-content-os-v10';
-const STATIC=['/','/styles.css?v=10','/app.js?v=10','/notifications.js?v=10','/manifest.webmanifest','/icon.svg'];
+const CACHE='ghaith-web-content-os-v11';
+const STATIC=['/','/styles.css?v=11','/app.js?v=11','/notifications.js?v=11','/manifest.webmanifest','/icon.svg'];
 self.addEventListener('install',event=>{
   event.waitUntil((async()=>{
     const cache=await caches.open(CACHE);
