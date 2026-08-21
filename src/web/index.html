@@ -8,7 +8,7 @@
   <title>Ghaith Web Content OS</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="/styles.css?v=10" />
+  <link rel="stylesheet" href="/styles.css?v=11" />
   <style>
     @media(max-width:640px){
       .workflow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible;gap:8px;padding:10px}
@@ -162,18 +162,18 @@
 </div>
 
 <div id="toastHost" class="toast-host"></div>
-<script src="/app.js?v=10"></script>
-<script src="/notifications.js?v=10"></script>
+<script src="/app.js?v=11"></script>
+<script src="/notifications.js?v=11"></script>
 <script>
 (() => {
-  let googleConnected = false;
+  let searchConsoleConnected = false;
   function injectSearchConsole() {
     const grid = document.getElementById('integrationGrid');
     if (grid && !grid.querySelector('[data-search-console-card]')) {
       const card = document.createElement('article');
       card.className = 'integration-card';
       card.setAttribute('data-search-console-card', '');
-      card.innerHTML = `<div class="top"><h3>Google Search Console</h3><span class="${googleConnected ? 'pill-on' : 'pill-off'}">${googleConnected ? 'متصل' : 'يحتاج إعداد'}</span></div><p>قراءة أداء البحث والفهرسة وبيانات ظهور الموقع في Google.</p>`;
+      card.innerHTML = `<div class="top"><h3>Google Search Console</h3><span class="${searchConsoleConnected ? 'pill-on' : 'pill-off'}">${searchConsoleConnected ? 'متصل' : 'يحتاج إعداد'}</span></div><p>قراءة أداء البحث والفهرسة وبيانات ظهور الموقع في Google.</p>`;
       grid.appendChild(card);
     }
     const mini = document.getElementById('integrationMini');
@@ -181,15 +181,16 @@
       const row = document.createElement('div');
       row.className = 'row';
       row.setAttribute('data-search-console-mini', '');
-      row.innerHTML = `<span>Google Search Console</span><b class="${googleConnected ? 'pill-on' : 'pill-off'}">${googleConnected ? 'جاهز' : 'غير مضبوط'}</b>`;
+      row.innerHTML = `<span>Google Search Console</span><b class="${searchConsoleConnected ? 'pill-on' : 'pill-off'}">${searchConsoleConnected ? 'جاهز' : 'غير مضبوط'}</b>`;
       mini.appendChild(row);
     }
   }
   window.addEventListener('DOMContentLoaded', async () => {
     try {
-      const res = await fetch('/api/integrations/google-drive/status', { cache: 'no-store' });
+      const res = await fetch('/api/integrations/search-console/test', { cache: 'no-store' });
       const data = await res.json();
-      googleConnected = Boolean(data && data.connected);
+      window.__searchConsoleProbe = data;
+      searchConsoleConnected = Boolean(res.ok && data && (data.connected || data.ok));
     } catch {}
     injectSearchConsole();
     const grid = document.getElementById('integrationGrid');
@@ -240,6 +241,6 @@
   });
 })();
 </script>
-<!-- mobile bootstrap refresh: 2026-08-21 -->
+<!-- hardening status refresh: 2026-08-21 -->
 </body>
 </html>
