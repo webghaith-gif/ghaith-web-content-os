@@ -74,16 +74,13 @@ export class ClickUpAdapter {
     });
   }
 
-  async attachTaskFileFromUrl(taskId: string, fileUrl: string, fileName: string): Promise<void> {
+  async attachTaskFile(taskId: string, bytes: Uint8Array, fileName: string, contentType = 'application/octet-stream'): Promise<void> {
     if (!env.CLICKUP_API_TOKEN) return;
 
-    const source = await fetch(fileUrl);
-    if (!source.ok) throw new Error(`Unable to download publishing asset (${source.status}) from ${fileUrl}`);
-
-    const bytes = await source.arrayBuffer();
-    const contentType = source.headers.get('content-type') || 'application/octet-stream';
+    const binary = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(binary).set(bytes);
     const form = new FormData();
-    form.append('attachment', new Blob([bytes], { type: contentType }), fileName);
+    form.append('attachment', new Blob([binary], { type: contentType }), fileName);
 
     const response = await fetch(`https://api.clickup.com/api/v2/task/${taskId}/attachment`, {
       method: 'POST',
@@ -95,5 +92,16 @@ export class ClickUpAdapter {
       const detail = await response.text().catch(() => '');
       throw new Error(`ClickUp attachment upload failed (${response.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`);
     }
+  }
+
+  async attachTaskFileFromUrl(taskId: string, fileUrl: string, fileName: string): Promise<void> {
+    if (!env.CLICKUP_API_TOKEN) return;
+
+    const source = await fetch(fileUrl);
+    if (!source.ok) throw new Error(`Unable to download publishing asset (${source.status}) from ${fileUrl}`);
+
+    const bytes = new Uint8Array(await source.arrayBuffer());
+    const contentType = source.headers.get('content-type') || 'application/octet-stream';
+    await this.attachTaskFile(taskId, bytes, fileName, contentType);
   }
 }
