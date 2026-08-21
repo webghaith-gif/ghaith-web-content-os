@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { env } from '../config/env';
+import { PostgresDb } from '../repositories/postgres-db';
+import { PersistentGoogleDriveStore } from '../repositories/persistent-google-drive-store';
 import type { Store } from '../repositories/store';
 
 interface GoogleTokenResponse {
@@ -22,7 +24,20 @@ interface GoogleDriveOAuthStatus {
 const SEARCH_CONSOLE_READONLY_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
 
 export class GoogleDriveOAuthManager {
-  constructor(private readonly store: Store) {}
+  private readonly store: Store;
+
+  constructor(legacyStore: Store) {
+    this.store = env.GOOGLE_DRIVE_STATE_DATABASE_URL
+      ? new PersistentGoogleDriveStore(
+          new PostgresDb(
+            env.GOOGLE_DRIVE_STATE_DATABASE_URL,
+            env.DATABASE_SSL,
+            env.DATABASE_SSL_REJECT_UNAUTHORIZED,
+          ),
+          legacyStore,
+        )
+      : legacyStore;
+  }
 
   get configured(): boolean {
     return Boolean(env.GOOGLE_DRIVE_CLIENT_ID && env.GOOGLE_DRIVE_CLIENT_SECRET);
