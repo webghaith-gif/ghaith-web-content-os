@@ -155,9 +155,9 @@
         openExternal(external[name]);return;
       }
       if(name==='HeyGen'){
-        const probe=await json(testRoutes[name]);
-        if(!probe.ok)throw new Error(probe.message||'HeyGen يحتاج إعدادًا.');
-        openExternal(external[name]);return;
+        openExternal(external[name]);
+        notify('تم فتح HeyGen Free. الإنشاء المجاني يتم من واجهة HeyGen نفسها دون تشغيل API مدفوع.','success');
+        return;
       }
       if(name==='Gemini Automation'){
         const probe=await json(testRoutes[name]);
@@ -205,6 +205,23 @@
     }catch{}
   }
 
+  function syncHeyGenFreeBadge(){
+    document.querySelectorAll('#integrationGrid .integration-card').forEach(card=>{
+      if(integrationName(card)!=='HeyGen')return;
+      const badge=card.querySelector('.pill-on,.pill-off,.pill-manual');
+      if(badge){badge.className='pill-manual';badge.textContent='مجاني — جاهز يدويًا';}
+      const p=card.querySelector('p');
+      if(p)p.textContent='حساب HeyGen المجاني جاهز للاستخدام من الواجهة. إنشاء الفيديو يتم داخل HeyGen نفسه ولا يشغّل API مدفوعًا.';
+      card.setAttribute('aria-label','فتح HeyGen Free');
+    });
+    document.querySelectorAll('#integrationMini .row').forEach(row=>{
+      if(integrationName(row)!=='HeyGen')return;
+      const badge=row.querySelector('.pill-on,.pill-off,.pill-manual');
+      if(badge){badge.className='pill-manual';badge.textContent='مجاني';}
+      row.setAttribute('aria-label','فتح HeyGen Free');
+    });
+  }
+
   function injectStyle(){
     if(document.getElementById('integrationInteractionStyles'))return;
     const style=document.createElement('style');style.id='integrationInteractionStyles';style.textContent=`
@@ -241,9 +258,9 @@
   }
 
   window.addEventListener('DOMContentLoaded',()=>{
-    injectStyle();initSidebarOutsideClose();wireAll();syncSearchConsoleBadge();
+    injectStyle();initSidebarOutsideClose();wireAll();syncSearchConsoleBadge();syncHeyGenFreeBadge();
     const grid=document.getElementById('integrationGrid'),mini=document.getElementById('integrationMini');
-    const observer=new MutationObserver(()=>{wireAll();syncSearchConsoleBadge();});
+    const observer=new MutationObserver(()=>{wireAll();syncSearchConsoleBadge();syncHeyGenFreeBadge();});
     if(grid)observer.observe(grid,{childList:true,subtree:true});
     if(mini)observer.observe(mini,{childList:true,subtree:true});
   });
