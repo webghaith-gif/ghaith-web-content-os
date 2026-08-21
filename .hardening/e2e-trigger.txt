@@ -1,3 +1,4 @@
-trigger: 2026-08-21T17:27:00+01:00
+trigger: 2026-08-21T17:28:30+01:00
 scope: report -> opportunity -> content -> assets -> READY -> ClickUp -> Make
 platform: tiktok
+run: observable-2
