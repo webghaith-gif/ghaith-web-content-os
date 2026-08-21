@@ -8,7 +8,16 @@
   <title>Ghaith Web Content OS</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="/styles.css?v=9" />
+  <link rel="stylesheet" href="/styles.css?v=10" />
+  <style>
+    @media(max-width:640px){
+      .workflow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible;gap:8px;padding:10px}
+      .workflow>i{display:none}
+      .flow-step{min-width:0;width:100%;padding:10px 6px}
+      .flow-step span{white-space:normal;line-height:1.25}
+      .flow-step:last-of-type{grid-column:1/-1}
+    }
+  </style>
 </head>
 <body>
 <div class="app-shell">
@@ -153,8 +162,8 @@
 </div>
 
 <div id="toastHost" class="toast-host"></div>
-<script src="/app.js?v=9" defer></script>
-<script src="/notifications.js?v=9" defer></script>
+<script src="/app.js?v=10"></script>
+<script src="/notifications.js?v=10"></script>
 <script>
 (() => {
   let googleConnected = false;
@@ -188,8 +197,49 @@
     if (grid) new MutationObserver(injectSearchConsole).observe(grid, { childList: true });
     if (mini) new MutationObserver(injectSearchConsole).observe(mini, { childList: true });
   });
+
+  window.addEventListener('load', () => {
+    setTimeout(async () => {
+      const publishMode = document.getElementById('publishMode');
+      const metricsGrid = document.getElementById('metricsGrid');
+      const notHydrated = publishMode?.textContent?.trim() === '—' || !metricsGrid?.children?.length;
+      if (!notHydrated) return;
+
+      try {
+        if (typeof window.loadAll === 'function') await window.loadAll(false);
+      } catch {}
+
+      const stillNotHydrated = publishMode?.textContent?.trim() === '—' || !metricsGrid?.children?.length;
+      if (!stillNotHydrated) return;
+
+      try {
+        const [systemRes, metricsRes] = await Promise.all([
+          fetch('/api/system', { cache: 'no-store' }),
+          fetch('/api/metrics', { cache: 'no-store' })
+        ]);
+        if (!systemRes.ok || !metricsRes.ok) throw new Error('bootstrap failed');
+        const system = await systemRes.json();
+        const metrics = await metricsRes.json();
+
+        if (publishMode) publishMode.textContent = system.publishMode === 'clickup_watch' ? 'ClickUp Watch → Make' : 'Make Webhook';
+        if (metricsGrid && !metricsGrid.children.length) {
+          const cards = [
+            ['إجمالي المحتوى', metrics.totalContent || 0],
+            ['قيد المراجعة', metrics.IN_REVIEW || 0],
+            ['جاهز للنشر', metrics.READY || 0],
+            ['تم النشر', metrics.PUBLISHED || 0]
+          ];
+          metricsGrid.innerHTML = cards.map(([label, value]) => `<div class="metric-card"><div class="metric-label">${label}</div><div class="metric-value">${value}</div></div>`).join('');
+        }
+        const systemStatus = document.getElementById('systemStatus');
+        const systemDot = document.getElementById('systemDot');
+        if (systemStatus) systemStatus.textContent = system.integrations?.ClickUp ? 'النظام جاهز — ClickUp متصل' : 'التطبيق يعمل';
+        if (systemDot) systemDot.className = system.integrations?.ClickUp ? 'ok' : 'warn';
+      } catch {}
+    }, 1500);
+  });
 })();
 </script>
-<!-- frontend cache refresh: 2026-08-21 -->
+<!-- mobile bootstrap refresh: 2026-08-21 -->
 </body>
 </html>
