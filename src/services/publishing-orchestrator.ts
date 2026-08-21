@@ -5,16 +5,22 @@ import { Store } from '../repositories/store';
 import { ApprovalService } from './approval.service';
 import { PlatformRegistry } from '../platforms/registry';
 import { ClickUpAdapter } from '../integrations/clickup.adapter';
+import { GoogleDriveFileReader } from '../integrations/google-drive-file-reader';
 import { env } from '../config/env';
 import { buildClickUpWatchPlans } from './clickup-watch-contract';
 
 export class PublishingOrchestrator {
+  private readonly driveFiles: GoogleDriveFileReader;
+
   constructor(
     private readonly store: Store,
     private readonly approval: ApprovalService,
     private readonly platforms = new PlatformRegistry(),
     private readonly clickup = new ClickUpAdapter(),
-  ) {}
+    driveFiles?: GoogleDriveFileReader,
+  ) {
+    this.driveFiles = driveFiles ?? new GoogleDriveFileReader(store);
+  }
 
   async publish(contentId: string) {
     const content = await this.store.getContent(contentId);
@@ -47,7 +53,16 @@ export class PublishingOrchestrator {
         if (!task?.id) throw new AppError(`ClickUp did not create a task for ${plan.platform}.`, 502, 'CLICKUP_HANDOFF_FAILED');
 
         try {
-          await this.clickup.attachTaskFileFromUrl(task.id, plan.asset.url, plan.fileName);
+          const driveBacked = Boolean(
+            plan.asset.providerId
+            && (plan.asset.provider === 'google-drive' || plan.asset.provider === 'remotion'),
+          );
+          if (driveBacked) {
+            const file = await this.driveFiles.download(plan.asset.providerId!);
+            await this.clickup.attachTaskFile(task.id, file.bytes, plan.fileName || file.name || 'ghaith-web-asset', file.mimeType);
+          } else {
+            await this.clickup.attachTaskFileFromUrl(task.id, plan.asset.url, plan.fileName);
+          }
         } catch (error) {
           // A task without the expected attachment must never become routable by Make.
           try { await this.clickup.updateStatus(task.id, 'archived'); } catch { /* best-effort quarantine */ }
