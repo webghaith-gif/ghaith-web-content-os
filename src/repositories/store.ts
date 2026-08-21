@@ -123,7 +123,14 @@ export class Store {
 
   async addLog(input: Omit<PublicationLog, 'id' | 'timestamp'>): Promise<PublicationLog> {
     const log: PublicationLog = { ...input, id: randomUUID(), timestamp: new Date().toISOString() };
-    return this.db.mutate((db) => { db.logs.push(log); return log; });
+    return this.db.mutate((db) => {
+      if (input.result === 'SUCCESS') {
+        const existing = db.logs.find((x) => x.idempotencyKey === input.idempotencyKey && x.result === 'SUCCESS');
+        if (existing) return existing;
+      }
+      db.logs.push(log);
+      return log;
+    });
   }
   async listLogs() { return (await this.db.read()).logs; }
   async findSuccessfulLog(idempotencyKey: string) {
