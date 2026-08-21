@@ -2,6 +2,13 @@ import { env } from '../config/env';
 import type { PublishRequest, PublishResponse } from '../core/types';
 import { fetchJson } from '../utils/http';
 
+export interface MakeConnectionProbe {
+  ok: boolean;
+  enabled: boolean;
+  mode: 'webhook' | 'disabled';
+  message?: string;
+}
+
 /**
  * Backward-compatible webhook publisher.
  *
@@ -17,6 +24,53 @@ import { fetchJson } from '../utils/http';
 export class MakeAdapter {
   get enabled() { return Boolean(env.PUBLISH_WEBHOOK_URL); }
 
+  async testConnection(): Promise<MakeConnectionProbe> {
+    if (!env.PUBLISH_WEBHOOK_URL) {
+      return {
+        ok: false,
+        enabled: false,
+        mode: 'disabled',
+        message: 'PUBLISH_WEBHOOK_URL is not configured.',
+      };
+    }
+
+    try {
+      const response = await fetch(env.PUBLISH_WEBHOOK_URL, {
+        method: 'POST',
+        headers: webhookHeaders(),
+        body: JSON.stringify({
+          action: 'connection_test',
+          source: 'ghaith-web-content-os',
+          sentAt: new Date().toISOString(),
+        }),
+      });
+
+      const text = await response.text().catch(() => '');
+      if (!response.ok) {
+        return {
+          ok: false,
+          enabled: true,
+          mode: 'webhook',
+          message: `Make webhook returned HTTP ${response.status}${text ? `: ${text.slice(0, 180)}` : ''}`,
+        };
+      }
+
+      return {
+        ok: true,
+        enabled: true,
+        mode: 'webhook',
+        message: `Make webhook accepted the authenticated test request (HTTP ${response.status}).`,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        enabled: true,
+        mode: 'webhook',
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
   async publish(payload: PublishRequest): Promise<PublishResponse> {
     if (!env.PUBLISH_WEBHOOK_URL) {
       return {
@@ -31,15 +85,7 @@ export class MakeAdapter {
       env.PUBLISH_WEBHOOK_URL,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(env.PUBLISH_WEBHOOK_SECRET
-            ? {
-                'X-Ghaith-Webhook-Secret': env.PUBLISH_WEBHOOK_SECRET,
-                'x-make-apikey': env.PUBLISH_WEBHOOK_SECRET,
-              }
-            : {}),
-        },
+        headers: webhookHeaders(),
         body: JSON.stringify(payload),
       },
       env.PUBLISH_MAX_RETRIES,
@@ -55,4 +101,16 @@ export class MakeAdapter {
       raw: result,
     };
   }
+}
+
+function webhookHeaders(): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    ...(env.PUBLISH_WEBHOOK_SECRET
+      ? {
+          'X-Ghaith-Webhook-Secret': env.PUBLISH_WEBHOOK_SECRET,
+          'x-make-apikey': env.PUBLISH_WEBHOOK_SECRET,
+        }
+      : {}),
+  };
 }
