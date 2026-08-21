@@ -152,6 +152,7 @@
       }
       if(name==='Canva'){
         const probe=await json(testRoutes[name]);
+        window.__canvaProbe=probe;
         if(!probe.ok)throw new Error(probe.message||'Canva يحتاج إعدادًا.');
         openExternal(external[name]);return;
       }
@@ -219,6 +220,32 @@
     }catch{}
   }
 
+  let canvaProbePromise=null;
+  async function getCanvaProbe(){
+    if(window.__canvaProbe)return window.__canvaProbe;
+    if(!canvaProbePromise){
+      canvaProbePromise=json('/api/integrations/canva/status')
+        .then(probe=>{window.__canvaProbe=probe;return probe;})
+        .finally(()=>{canvaProbePromise=null;});
+    }
+    return canvaProbePromise;
+  }
+  async function syncCanvaBadge(){
+    try{
+      const probe=await getCanvaProbe();
+      document.querySelectorAll('#integrationGrid .integration-card,#integrationMini .row').forEach(el=>{
+        if(integrationName(el)!=='Canva')return;
+        const badge=el.querySelector('.pill-on,.pill-off,.pill-manual');if(!badge)return;
+        const mini=el.matches('#integrationMini .row');
+        const connected=Boolean(probe.connected);
+        const className=connected?'pill-on':'pill-off';
+        const label=connected?(mini?'جاهز':'متصل'):(mini?'غير مضبوط':'يحتاج إعداد');
+        if(badge.className!==className)badge.className=className;
+        if(badge.textContent!==label)badge.textContent=label;
+      });
+    }catch{}
+  }
+
   function syncHeyGenFreeBadge(){
     document.querySelectorAll('#integrationGrid .integration-card').forEach(card=>{
       if(integrationName(card)!=='HeyGen')return;
@@ -273,9 +300,9 @@
   }
 
   window.addEventListener('DOMContentLoaded',()=>{
-    injectStyle();initSidebarOutsideClose();wireAll();syncSearchConsoleBadge();syncHeyGenFreeBadge();
+    injectStyle();initSidebarOutsideClose();wireAll();syncSearchConsoleBadge();syncCanvaBadge();syncHeyGenFreeBadge();
     const grid=document.getElementById('integrationGrid'),mini=document.getElementById('integrationMini');
-    const observer=new MutationObserver(()=>{wireAll();syncSearchConsoleBadge();syncHeyGenFreeBadge();});
+    const observer=new MutationObserver(()=>{wireAll();syncSearchConsoleBadge();syncCanvaBadge();syncHeyGenFreeBadge();});
     if(grid)observer.observe(grid,{childList:true});
     if(mini)observer.observe(mini,{childList:true});
   });
