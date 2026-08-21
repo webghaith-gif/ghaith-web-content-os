@@ -8,137 +8,155 @@
   <title>Ghaith Web Content OS</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="/styles.css?v=11" />
-  <style>
-    @media(max-width:640px){
-      .workflow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible;gap:8px;padding:10px}
-      .workflow>i{display:none}
-      .flow-step{min-width:0;width:100%;padding:10px 6px}
-      .flow-step span{white-space:normal;line-height:1.25}
-      .flow-step:last-of-type{grid-column:1/-1}
-    }
-  </style>
+  <link rel="stylesheet" href="/styles.css?v=12" />
 </head>
 <body>
 <div class="app-shell">
-  <aside class="sidebar" id="sidebar">
-    <div class="brand">
-      <div class="brand-mark">GW</div>
-      <div><strong>غيث ويب</strong><span>Content OS</span></div>
+  <aside class="sidebar" id="sidebar" aria-label="القائمة الرئيسية">
+    <div class="sidebar-head">
+      <div class="brand">
+        <div class="brand-mark">GW</div>
+        <div><strong>غيث ويب</strong><span>Content OS</span></div>
+      </div>
+      <button class="icon-btn sidebar-close mobile-only" id="sidebarCloseBtn" type="button" aria-label="إغلاق القائمة">×</button>
     </div>
-    <nav id="nav">
-      <button class="nav-item active" data-view="dashboard"><span>⌂</span>لوحة التحكم</button>
-      <button class="nav-item" data-view="reports"><span>▤</span>التقارير</button>
-      <button class="nav-item" data-view="opportunities"><span>✦</span>الفرص</button>
-      <button class="nav-item" data-view="content"><span>▣</span>المحتوى</button>
-      <button class="nav-item" data-view="logs"><span>≡</span>سجل النشر</button>
-      <button class="nav-item" data-view="integrations"><span>⛓</span>التكاملات</button>
-      <button class="nav-item" id="notificationLaunchBtn" type="button" onclick="document.getElementById('notificationBtn')?.click()"><span>🔔</span>تفعيل الإشعارات</button>
+
+    <nav id="nav" class="main-nav">
+      <button class="nav-item active" type="button" data-view="dashboard"><span class="nav-icon">⌂</span><span>لوحة التحكم</span></button>
+      <button class="nav-item" type="button" data-view="reports"><span class="nav-icon">▤</span><span>التقارير</span><b id="navReportsCount">0</b></button>
+      <button class="nav-item" type="button" data-view="opportunities"><span class="nav-icon">✦</span><span>الفرص</span><b id="navOpportunitiesCount">0</b></button>
+      <button class="nav-item" type="button" data-view="content"><span class="nav-icon">▣</span><span>المحتوى</span><b id="navContentCount">0</b></button>
+      <button class="nav-item" type="button" data-view="logs"><span class="nav-icon">≡</span><span>سجل النشر</span><b id="navLogsCount">0</b></button>
+      <button class="nav-item" type="button" data-view="integrations"><span class="nav-icon">⛓</span><span>التكاملات</span><b id="navIntegrationsCount">0</b></button>
+      <button class="nav-item" id="notificationLaunchBtn" type="button"><span class="nav-icon">🔔</span><span>الإشعارات</span></button>
     </nav>
+
     <div class="sidebar-foot">
       <div class="mini-status"><i id="systemDot"></i><span id="systemStatus">جاري الفحص…</span></div>
-      <small>Reports → ClickUp → Make → Public</small>
+      <small>Reports → Opportunities → Content → ClickUp → Make → Public</small>
     </div>
   </aside>
+  <div class="drawer-overlay" id="drawerOverlay"></div>
 
   <main class="main">
     <header class="topbar">
       <div class="top-title">
-        <button class="icon-btn mobile-only" id="menuBtn" aria-label="القائمة">☰</button>
+        <button class="icon-btn mobile-only" id="menuBtn" type="button" aria-label="فتح القائمة">☰</button>
         <div class="nav-history" role="group" aria-label="التنقل بين الصفحات">
-          <button class="icon-btn nav-arrow" id="navBackBtn" type="button" aria-label="الرجوع إلى الصفحة السابقة" title="رجوع" disabled>→</button>
-          <button class="icon-btn nav-arrow" id="navForwardBtn" type="button" aria-label="التقدم إلى الصفحة التالية" title="تقدّم" disabled>←</button>
+          <button class="icon-btn nav-arrow" id="navBackBtn" type="button" aria-label="الرجوع" title="رجوع" disabled>→</button>
+          <button class="icon-btn nav-arrow" id="navForwardBtn" type="button" aria-label="التقدم" title="تقدّم" disabled>←</button>
         </div>
         <div class="title-copy"><h1 id="pageTitle">لوحة التحكم</h1><p id="pageSubtitle">متابعة المنظومة من الفكرة حتى النشر</p></div>
       </div>
       <div class="top-actions">
         <button class="btn ghost" id="installBtn" hidden>تثبيت التطبيق</button>
-        <button class="icon-btn" id="refreshBtn" title="تحديث">↻</button>
-        <button class="btn primary" data-open="reportModal">+ تقرير جديد</button>
+        <button class="icon-btn" id="refreshBtn" type="button" title="تحديث" aria-label="تحديث">↻</button>
+        <button class="btn primary" type="button" data-open="reportModal">+ تقرير جديد</button>
       </div>
     </header>
 
     <section class="view active" id="view-dashboard">
       <div class="hero panel">
-        <div>
+        <div class="hero-copy">
           <span class="eyebrow">GHAITH WEB CONTENT OS</span>
-          <h2>من الذكاء إلى منشور عام — بموافقة بشرية إلزامية</h2>
-          <p>التقارير والفرص والمحتوى والأصول والمراجعة وClickUp وMake والنتائج في مكان واحد.</p>
+          <h2>مركز تشغيل فعلي — وليس لوحة عرض فقط</h2>
+          <p>افتح التقارير والفرص والمحتوى والتكاملات من البطاقات نفسها، وتابع حالة النشر من مكان واحد.</p>
         </div>
-        <button class="hero-state interactive-card" type="button" data-view-link="integrations"><span>وضع النشر</span><strong id="publishMode">—</strong></button>
+        <button class="hero-state interactive-card" type="button" data-view-link="integrations">
+          <span>وضع النشر</span><strong id="publishMode">جاري الفحص…</strong><small>اضغط لفتح التكاملات</small>
+        </button>
       </div>
+
+      <section class="quick-actions" aria-label="إجراءات سريعة">
+        <button type="button" class="quick-action primary-action" data-open="reportModal"><span>＋</span><b>تقرير جديد</b><small>ابدأ من تقرير أو فكرة</small></button>
+        <button type="button" class="quick-action" data-view-link="reports"><span>▤</span><b>فتح التقارير</b><small id="quickReportsText">عرض كل التقارير</small></button>
+        <button type="button" class="quick-action" data-view-link="opportunities"><span>✦</span><b>بنك الفرص</b><small id="quickOpportunitiesText">عرض الفرص</small></button>
+        <button type="button" class="quick-action" data-view-link="content"><span>▣</span><b>خط المحتوى</b><small id="quickContentText">المراجعة والجاهزية</small></button>
+        <button type="button" class="quick-action" data-view-link="integrations"><span>⛓</span><b>التكاملات</b><small id="quickIntegrationsText">عرض كل الاتصالات</small></button>
+      </section>
 
       <div class="workflow panel" id="workflow">
-        <button class="flow-step" type="button" data-view-link="reports"><b>1</b><span>Reports</span></button><i>←</i>
-        <button class="flow-step" type="button" data-view-link="opportunities"><b>2</b><span>Opportunities</span></button><i>←</i>
-        <button class="flow-step" type="button" data-view-link="content"><b>3</b><span>Content</span></button><i>←</i>
-        <button class="flow-step" type="button" data-view-link="content" data-content-status="IN_REVIEW"><b>4</b><span>IN REVIEW</span></button><i>←</i>
-        <button class="flow-step accent" type="button" data-view-link="content" data-content-status="READY"><b>5</b><span>ClickUp READY</span></button><i>←</i>
-        <button class="flow-step accent" type="button" data-view-link="integrations"><b>6</b><span>Make</span></button><i>←</i>
-        <button class="flow-step success" type="button" data-view-link="content" data-content-status="PUBLISHED"><b>7</b><span>PUBLISHED</span></button>
+        <button class="flow-step" type="button" data-view-link="reports"><b>1</b><span>Reports</span><small>التقارير</small></button>
+        <button class="flow-step" type="button" data-view-link="opportunities"><b>2</b><span>Opportunities</span><small>الفرص</small></button>
+        <button class="flow-step" type="button" data-view-link="content"><b>3</b><span>Content</span><small>المحتوى</small></button>
+        <button class="flow-step" type="button" data-view-link="content" data-content-status="IN_REVIEW"><b>4</b><span>IN REVIEW</span><small>المراجعة</small></button>
+        <button class="flow-step accent" type="button" data-view-link="content" data-content-status="READY"><b>5</b><span>ClickUp READY</span><small>جاهز</small></button>
+        <button class="flow-step accent" type="button" data-view-link="integrations"><b>6</b><span>Make</span><small>الأتمتة</small></button>
+        <button class="flow-step success" type="button" data-view-link="content" data-content-status="PUBLISHED"><b>7</b><span>PUBLISHED</span><small>منشور</small></button>
       </div>
 
-      <div class="metrics-grid" id="metricsGrid"></div>
+      <div class="metrics-grid" id="metricsGrid"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></div>
 
       <div class="two-col">
         <section class="panel">
-          <div class="panel-head"><div><h3>آخر المحتوى</h3><p>أحدث حزم المحتوى وحالتها</p></div><button class="link-btn" data-view-link="content">عرض الكل</button></div>
-          <div id="latestContent" class="list-stack empty-box">لا يوجد محتوى بعد.</div>
+          <div class="panel-head"><div><h3>آخر المحتوى</h3><p>أحدث الحزم وحالتها الفعلية</p></div><button class="link-btn" type="button" data-view-link="content">عرض الكل ←</button></div>
+          <div id="latestContent" class="list-stack"><div class="loading-row">جاري تحميل المحتوى…</div></div>
         </section>
         <section class="panel">
-          <div class="panel-head"><div><h3>جاهزية التكاملات</h3><p>الاتصالات اللازمة للتشغيل الفعلي</p></div><button class="link-btn" data-view-link="integrations">التفاصيل</button></div>
-          <div id="integrationMini" class="integration-mini"></div>
+          <div class="panel-head"><div><h3>جاهزية التكاملات</h3><p>ملخص لكل الاتصالات المهمة</p></div><button class="link-btn" type="button" data-view-link="integrations">التفاصيل ←</button></div>
+          <div id="integrationMini" class="integration-mini"><div class="loading-row">جاري فحص التكاملات…</div></div>
         </section>
       </div>
     </section>
 
     <section class="view" id="view-reports">
       <div class="section-toolbar">
-        <div><h2>التقارير والذكاء</h2><p>أضف التقرير اليومي أو السابق ثم استخرج منه فرصًا قابلة للتنفيذ.</p></div>
-        <div class="toolbar-actions"><button class="btn ghost" id="archiveAllReportsBtn">حفظ كل التقارير في Drive</button><button class="btn primary" data-open="reportModal">+ إضافة تقرير</button></div>
+        <div><span class="section-kicker">INTELLIGENCE</span><h2>التقارير والذكاء</h2><p>كل تقرير قابل للفتح والقراءة والحفظ في Drive واستخراج الفرص منه.</p></div>
+        <div class="toolbar-actions"><button class="btn ghost" id="archiveAllReportsBtn" type="button">حفظ الكل في Drive</button><button class="btn primary" type="button" data-open="reportModal">+ إضافة تقرير</button></div>
       </div>
-      <div class="panel table-wrap"><table><thead><tr><th>العنوان</th><th>المصدر</th><th>التاريخ</th><th>الإجراء</th></tr></thead><tbody id="reportsBody"></tbody></table></div>
+      <div id="reportsCards" class="mobile-cards"></div>
+      <div class="panel table-wrap desktop-table"><table><thead><tr><th>العنوان</th><th>المصدر</th><th>التاريخ</th><th>الإجراء</th></tr></thead><tbody id="reportsBody"></tbody></table></div>
     </section>
 
     <section class="view" id="view-opportunities">
-      <div class="section-toolbar"><div><h2>بنك الفرص</h2><p>الفرص مرتبة تلقائيًا حسب قوة الإشارة والملاءمة.</p></div><span class="badge" id="opportunityCount">0 فرصة</span></div>
+      <div class="section-toolbar"><div><span class="section-kicker">OPPORTUNITIES</span><h2>بنك الفرص</h2><p>افتح أي فرصة ثم حوّلها مباشرة إلى حزمة محتوى للمنصات المطلوبة.</p></div><span class="badge" id="opportunityCount">0 فرصة</span></div>
       <div class="cards-grid" id="opportunityGrid"></div>
     </section>
 
     <section class="view" id="view-content">
       <div class="section-toolbar">
-        <div><h2>خط إنتاج المحتوى</h2><p>المراجعة والموافقة والأصول والتسليم إلى ClickUp ثم Make.</p></div>
-        <select id="contentFilter" class="select"><option value="ALL">كل الحالات</option><option>IN_REVIEW</option><option>READY</option><option>PUBLISHED</option><option>DRAFT</option><option>IN_PROGRESS</option><option>ARCHIVED</option></select>
+        <div><span class="section-kicker">CONTENT PIPELINE</span><h2>خط إنتاج المحتوى</h2><p>التفاصيل والأصول والمراجعة وREADY والتسليم إلى ClickUp وMake.</p></div>
+        <select id="contentFilter" class="select" aria-label="تصفية المحتوى"><option value="ALL">كل الحالات</option><option>IN_REVIEW</option><option>READY</option><option>PUBLISHED</option><option>DRAFT</option><option>IN_PROGRESS</option><option>ARCHIVED</option></select>
       </div>
       <div id="contentGrid" class="content-grid"></div>
     </section>
 
     <section class="view" id="view-logs">
-      <div class="section-toolbar"><div><h2>سجل النشر</h2><p>SUCCESS / WARNING / ERROR لكل منصة.</p></div><div class="legend"><span class="dot success"></span>نجاح <span class="dot warning"></span>تحذير <span class="dot error"></span>خطأ</div></div>
-      <div class="panel table-wrap"><table><thead><tr><th>النتيجة</th><th>المنصة</th><th>المحتوى</th><th>المحاولة</th><th>التاريخ</th><th>الرابط</th></tr></thead><tbody id="logsBody"></tbody></table></div>
+      <div class="section-toolbar"><div><span class="section-kicker">PUBLISHING</span><h2>سجل النشر</h2><p>النتيجة الحقيقية لكل عملية: SUCCESS / WARNING / ERROR.</p></div><div class="legend"><span class="dot success"></span>نجاح <span class="dot warning"></span>تحذير <span class="dot error"></span>خطأ</div></div>
+      <div id="logsCards" class="mobile-cards"></div>
+      <div class="panel table-wrap desktop-table"><table><thead><tr><th>النتيجة</th><th>المنصة</th><th>المحتوى</th><th>المحاولة</th><th>التاريخ</th><th>الرابط</th></tr></thead><tbody id="logsBody"></tbody></table></div>
     </section>
 
     <section class="view" id="view-integrations">
-      <div class="section-toolbar"><div><h2>التكاملات</h2><p>لا تُعرض المفاتيح السرية هنا. الاتصال يتم من متغيرات البيئة على الخادم.</p></div><button class="btn ghost" id="copyEnvBtn">نسخ أسماء الإعدادات</button></div>
-      <div class="integration-grid" id="integrationGrid"></div>
-      <div class="panel note-panel"><h3>وضع Ghaith Web الحالي</h3><p>الوضع الافتراضي <b>clickup_watch</b>: عند الموافقة يصبح المحتوى READY داخل ClickUp، ثم يلتقطه سيناريو Make الحالي عبر Watch Tasks. ويمكن التحويل إلى webhook لاحقًا دون تغيير Core.</p></div>
+      <div class="section-toolbar"><div><span class="section-kicker">INTEGRATIONS</span><h2>مركز التكاملات</h2><p>كل الأدوات في مكان واحد مع الحالة الفعلية والإجراء الممكن.</p></div><button class="btn ghost" id="refreshIntegrationsBtn" type="button">↻ فحص الاتصالات</button></div>
+      <div class="integration-summary" id="integrationSummary"></div>
+      <div class="integration-grid" id="integrationGrid"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></div>
+      <div class="panel note-panel"><h3>المسار التشغيلي الحالي</h3><p><b>Ghaith Web → ClickUp READY → Make Watch Tasks → المنصة → PUBLISHED → SUCCESS</b></p><p>لا يتم عرض أي اتصال على أنه «جاهز» إلا عندما توجد إشارة فعلية تدعمه، وما هو يدوي يظهر بوضوح كـ «يدوي».</p></div>
     </section>
   </main>
 </div>
 
+<nav class="bottom-nav mobile-only" id="bottomNav" aria-label="تنقل سريع">
+  <button type="button" class="bottom-nav-item active" data-view="dashboard"><span>⌂</span><b>الرئيسية</b></button>
+  <button type="button" class="bottom-nav-item" data-view="reports"><span>▤</span><b>التقارير</b></button>
+  <button type="button" class="bottom-nav-item" data-view="opportunities"><span>✦</span><b>الفرص</b></button>
+  <button type="button" class="bottom-nav-item" data-view="content"><span>▣</span><b>المحتوى</b></button>
+  <button type="button" class="bottom-nav-item" data-view="integrations"><span>⛓</span><b>التكاملات</b></button>
+</nav>
+
 <div class="modal-backdrop" id="modalBackdrop"></div>
 <div class="modal" id="reportModal" aria-hidden="true">
-  <div class="modal-head"><div><h3>إضافة تقرير</h3><p>يمكنك لصق تقرير اليوم أو أي تقرير سابق.</p></div><button class="icon-btn" data-close>×</button></div>
+  <div class="modal-head"><div><h3>إضافة تقرير</h3><p>الصق التقرير، وسيتم حفظه ثم أرشفته في Drive.</p></div><button class="icon-btn" type="button" data-close>×</button></div>
   <form id="reportForm" class="form-grid">
-    <label>العنوان<input name="title" required placeholder="مثال: التقرير اليومي الشامل — 15 أوت 2026" /></label>
-    <label>المصدر<input name="source" placeholder="Daily Intelligence / Manual / Ghaith Web" /></label>
+    <label>العنوان<input name="title" required placeholder="عنوان التقرير" /></label>
+    <label>المصدر<input name="source" placeholder="Daily Intelligence / Manual" /></label>
     <label class="full">نص التقرير<textarea name="body" required rows="12" placeholder="الصق التقرير هنا…"></textarea></label>
     <div class="form-actions full"><button type="button" class="btn ghost" data-close>إلغاء</button><button class="btn primary">حفظ التقرير</button></div>
   </form>
 </div>
 
 <div class="modal" id="platformModal" aria-hidden="true">
-  <div class="modal-head"><div><h3>إنشاء حزمة محتوى</h3><p id="platformOpportunityTitle"></p></div><button class="icon-btn" data-close>×</button></div>
+  <div class="modal-head"><div><h3>إنشاء حزمة محتوى</h3><p id="platformOpportunityTitle"></p></div><button class="icon-btn" type="button" data-close>×</button></div>
   <form id="platformForm">
     <input type="hidden" name="opportunityId" />
     <div class="platform-choices" id="platformChoices"></div>
@@ -147,100 +165,27 @@
 </div>
 
 <div class="modal wide" id="contentModal" aria-hidden="true">
-  <div class="modal-head"><div><h3 id="contentModalTitle">تفاصيل المحتوى</h3><p id="contentModalMeta"></p></div><button class="icon-btn" data-close>×</button></div>
+  <div class="modal-head"><div><h3 id="contentModalTitle">تفاصيل المحتوى</h3><p id="contentModalMeta"></p></div><button class="icon-btn" type="button" data-close>×</button></div>
   <div id="contentModalBody"></div>
 </div>
 
 <div class="modal wide" id="reportDetailsModal" aria-hidden="true">
-  <div class="modal-head"><div><h3 id="reportDetailsTitle">تفاصيل التقرير</h3><p id="reportDetailsMeta"></p></div><button class="icon-btn" data-close>×</button></div>
+  <div class="modal-head"><div><h3 id="reportDetailsTitle">تفاصيل التقرير</h3><p id="reportDetailsMeta"></p></div><button class="icon-btn" type="button" data-close>×</button></div>
   <div id="reportDetailsBody"></div>
 </div>
 
+<div class="modal wide" id="integrationModal" aria-hidden="true">
+  <div class="modal-head"><div><h3 id="integrationModalTitle">تفاصيل التكامل</h3><p id="integrationModalMeta"></p></div><button class="icon-btn" type="button" data-close>×</button></div>
+  <div id="integrationModalBody"></div>
+</div>
+
 <div class="modal small" id="confirmModal" aria-hidden="true">
-  <div class="modal-head"><div><h3>تأكيد التسليم للنشر</h3><p>لن يتم تجاوز بوابة READY.</p></div><button class="icon-btn" data-close>×</button></div>
-  <div class="confirm-box"><p id="confirmText"></p><div class="form-actions"><button class="btn ghost" data-close>إلغاء</button><button class="btn danger" id="confirmPublishBtn">اعتمد وأرسل للنشر</button></div></div>
+  <div class="modal-head"><div><h3>تأكيد التسليم للنشر</h3><p>لن يتم تجاوز بوابة READY.</p></div><button class="icon-btn" type="button" data-close>×</button></div>
+  <div class="confirm-box"><p id="confirmText"></p><div class="form-actions"><button class="btn ghost" type="button" data-close>إلغاء</button><button class="btn danger" type="button" id="confirmPublishBtn">اعتمد وأرسل للنشر</button></div></div>
 </div>
 
 <div id="toastHost" class="toast-host"></div>
-<script src="/app.js?v=11"></script>
-<script src="/notifications.js?v=11"></script>
-<script>
-(() => {
-  let searchConsoleConnected = false;
-  function injectSearchConsole() {
-    const grid = document.getElementById('integrationGrid');
-    if (grid && !grid.querySelector('[data-search-console-card]')) {
-      const card = document.createElement('article');
-      card.className = 'integration-card';
-      card.setAttribute('data-search-console-card', '');
-      card.innerHTML = `<div class="top"><h3>Google Search Console</h3><span class="${searchConsoleConnected ? 'pill-on' : 'pill-off'}">${searchConsoleConnected ? 'متصل' : 'يحتاج إعداد'}</span></div><p>قراءة أداء البحث والفهرسة وبيانات ظهور الموقع في Google.</p>`;
-      grid.appendChild(card);
-    }
-    const mini = document.getElementById('integrationMini');
-    if (mini && !mini.querySelector('[data-search-console-mini]')) {
-      const row = document.createElement('div');
-      row.className = 'row';
-      row.setAttribute('data-search-console-mini', '');
-      row.innerHTML = `<span>Google Search Console</span><b class="${searchConsoleConnected ? 'pill-on' : 'pill-off'}">${searchConsoleConnected ? 'جاهز' : 'غير مضبوط'}</b>`;
-      mini.appendChild(row);
-    }
-  }
-  window.addEventListener('DOMContentLoaded', async () => {
-    try {
-      const res = await fetch('/api/integrations/search-console/test', { cache: 'no-store' });
-      const data = await res.json();
-      window.__searchConsoleProbe = data;
-      searchConsoleConnected = Boolean(res.ok && data && (data.connected || data.ok));
-    } catch {}
-    injectSearchConsole();
-    const grid = document.getElementById('integrationGrid');
-    const mini = document.getElementById('integrationMini');
-    if (grid) new MutationObserver(injectSearchConsole).observe(grid, { childList: true });
-    if (mini) new MutationObserver(injectSearchConsole).observe(mini, { childList: true });
-  });
-
-  window.addEventListener('load', () => {
-    setTimeout(async () => {
-      const publishMode = document.getElementById('publishMode');
-      const metricsGrid = document.getElementById('metricsGrid');
-      const notHydrated = publishMode?.textContent?.trim() === '—' || !metricsGrid?.children?.length;
-      if (!notHydrated) return;
-
-      try {
-        if (typeof window.loadAll === 'function') await window.loadAll(false);
-      } catch {}
-
-      const stillNotHydrated = publishMode?.textContent?.trim() === '—' || !metricsGrid?.children?.length;
-      if (!stillNotHydrated) return;
-
-      try {
-        const [systemRes, metricsRes] = await Promise.all([
-          fetch('/api/system', { cache: 'no-store' }),
-          fetch('/api/metrics', { cache: 'no-store' })
-        ]);
-        if (!systemRes.ok || !metricsRes.ok) throw new Error('bootstrap failed');
-        const system = await systemRes.json();
-        const metrics = await metricsRes.json();
-
-        if (publishMode) publishMode.textContent = system.publishMode === 'clickup_watch' ? 'ClickUp Watch → Make' : 'Make Webhook';
-        if (metricsGrid && !metricsGrid.children.length) {
-          const cards = [
-            ['إجمالي المحتوى', metrics.totalContent || 0],
-            ['قيد المراجعة', metrics.IN_REVIEW || 0],
-            ['جاهز للنشر', metrics.READY || 0],
-            ['تم النشر', metrics.PUBLISHED || 0]
-          ];
-          metricsGrid.innerHTML = cards.map(([label, value]) => `<div class="metric-card"><div class="metric-label">${label}</div><div class="metric-value">${value}</div></div>`).join('');
-        }
-        const systemStatus = document.getElementById('systemStatus');
-        const systemDot = document.getElementById('systemDot');
-        if (systemStatus) systemStatus.textContent = system.integrations?.ClickUp ? 'النظام جاهز — ClickUp متصل' : 'التطبيق يعمل';
-        if (systemDot) systemDot.className = system.integrations?.ClickUp ? 'ok' : 'warn';
-      } catch {}
-    }, 1500);
-  });
-})();
-</script>
-<!-- hardening status refresh: 2026-08-21 -->
+<script src="/app.js?v=12"></script>
+<script src="/notifications.js?v=12"></script>
 </body>
 </html>
