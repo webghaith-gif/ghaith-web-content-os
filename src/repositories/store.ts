@@ -14,6 +14,10 @@ import type {
 export class Store {
   constructor(private readonly db: DatabaseBackend) {}
 
+  private async freshRead() {
+    return this.db.readFresh ? this.db.readFresh() : this.db.read();
+  }
+
   async healthCheck(): Promise<void> { await this.db.read(); }
 
   async createReport(input: Omit<Report, 'id' | 'createdAt'>): Promise<Report> {
@@ -127,7 +131,7 @@ export class Store {
   }
 
   async getCanvaOAuthToken(): Promise<CanvaOAuthTokenState | undefined> {
-    return (await this.db.read()).integrations.canva?.token;
+    return (await this.freshRead()).integrations.canva?.token;
   }
   async setCanvaOAuthToken(token: CanvaOAuthTokenState | undefined): Promise<void> {
     await this.db.mutate((db) => {
@@ -136,7 +140,7 @@ export class Store {
     });
   }
   async getCanvaOAuthPending(): Promise<CanvaOAuthPendingState | undefined> {
-    return (await this.db.read()).integrations.canva?.pending;
+    return (await this.freshRead()).integrations.canva?.pending;
   }
   async setCanvaOAuthPending(pending: CanvaOAuthPendingState | undefined): Promise<void> {
     await this.db.mutate((db) => {
@@ -146,7 +150,7 @@ export class Store {
   }
 
   async getGoogleDriveOAuthToken(): Promise<GoogleDriveOAuthTokenState | undefined> {
-    return (await this.db.read()).integrations.googleDrive?.token;
+    return (await this.freshRead()).integrations.googleDrive?.token;
   }
   async setGoogleDriveOAuthToken(token: GoogleDriveOAuthTokenState | undefined): Promise<void> {
     await this.db.mutate((db) => {
@@ -155,7 +159,7 @@ export class Store {
     });
   }
   async getGoogleDriveOAuthPending(): Promise<GoogleDriveOAuthPendingState | undefined> {
-    return (await this.db.read()).integrations.googleDrive?.pending;
+    return (await this.freshRead()).integrations.googleDrive?.pending;
   }
   async setGoogleDriveOAuthPending(pending: GoogleDriveOAuthPendingState | undefined): Promise<void> {
     await this.db.mutate((db) => {
@@ -164,7 +168,7 @@ export class Store {
     });
   }
   async getGoogleDriveFolderId(): Promise<string | undefined> {
-    return (await this.db.read()).integrations.googleDrive?.folderId;
+    return (await this.freshRead()).integrations.googleDrive?.folderId;
   }
   async setGoogleDriveFolderId(folderId: string | undefined): Promise<void> {
     await this.db.mutate((db) => {
@@ -173,7 +177,7 @@ export class Store {
     });
   }
   async getGoogleDriveWatch(): Promise<GoogleDriveWatchState | undefined> {
-    return (await this.db.read()).integrations.googleDrive?.watch;
+    return (await this.freshRead()).integrations.googleDrive?.watch;
   }
   async setGoogleDriveWatch(watch: GoogleDriveWatchState | undefined): Promise<void> {
     await this.db.mutate((db) => {
