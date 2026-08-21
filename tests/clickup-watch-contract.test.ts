@@ -57,6 +57,23 @@ test('fixed ClickUp Make contract creates one safe plan per supported platform',
   assert.equal(byPlatform.youtube!.fileName, 'video.mp4');
 });
 
+test('private Drive export is preferred over Canva edit URL for publishing', () => {
+  const plans = buildClickUpWatchPlans(content({
+    platforms: ['facebook', 'tiktok'],
+    assets: [
+      { kind: 'image', url: 'https://www.canva.com/design/private-edit', provider: 'canva', providerId: 'design-1' },
+      { kind: 'image', url: 'https://drive.google.com/file/d/image-file/view', provider: 'google-drive', providerId: 'image-file' },
+      { kind: 'video', url: 'https://drive.google.com/file/d/video-file/view', provider: 'remotion', providerId: 'video-file' },
+    ],
+  }));
+
+  const byPlatform = Object.fromEntries(plans.map((plan) => [plan.platform, plan]));
+  assert.equal(byPlatform.facebook!.asset.provider, 'google-drive');
+  assert.equal(byPlatform.facebook!.asset.providerId, 'image-file');
+  assert.equal(byPlatform.tiktok!.asset.provider, 'remotion');
+  assert.equal(byPlatform.tiktok!.asset.providerId, 'video-file');
+});
+
 test('clickup_watch rejects platforms that have no fixed Make route', () => {
   assert.throws(
     () => buildClickUpWatchPlans(content({ platforms: ['x'] })),
