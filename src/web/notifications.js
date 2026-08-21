@@ -199,8 +199,10 @@
       const probe=await json('/api/integrations/search-console/test');
       document.querySelectorAll('[data-search-console-card],[data-search-console-mini]').forEach(el=>{
         const badge=el.querySelector('.pill-on,.pill-off,.pill-manual');if(!badge)return;
-        badge.className=probe.connected?'pill-on':'pill-off';
-        badge.textContent=probe.connected?(el.hasAttribute('data-search-console-mini')?'جاهز':'متصل'):(el.hasAttribute('data-search-console-mini')?'غير مضبوط':'يحتاج إعداد');
+        const className=probe.connected?'pill-on':'pill-off';
+        const label=probe.connected?(el.hasAttribute('data-search-console-mini')?'جاهز':'متصل'):(el.hasAttribute('data-search-console-mini')?'غير مضبوط':'يحتاج إعداد');
+        if(badge.className!==className)badge.className=className;
+        if(badge.textContent!==label)badge.textContent=label;
       });
     }catch{}
   }
@@ -209,15 +211,16 @@
     document.querySelectorAll('#integrationGrid .integration-card').forEach(card=>{
       if(integrationName(card)!=='HeyGen')return;
       const badge=card.querySelector('.pill-on,.pill-off,.pill-manual');
-      if(badge){badge.className='pill-manual';badge.textContent='مجاني — جاهز يدويًا';}
+      if(badge){if(badge.className!=='pill-manual')badge.className='pill-manual';if(badge.textContent!=='مجاني — جاهز يدويًا')badge.textContent='مجاني — جاهز يدويًا';}
       const p=card.querySelector('p');
-      if(p)p.textContent='حساب HeyGen المجاني جاهز للاستخدام من الواجهة. إنشاء الفيديو يتم داخل HeyGen نفسه ولا يشغّل API مدفوعًا.';
+      const copy='حساب HeyGen المجاني جاهز للاستخدام من الواجهة. إنشاء الفيديو يتم داخل HeyGen نفسه ولا يشغّل API مدفوعًا.';
+      if(p&&p.textContent!==copy)p.textContent=copy;
       card.setAttribute('aria-label','فتح HeyGen Free');
     });
     document.querySelectorAll('#integrationMini .row').forEach(row=>{
       if(integrationName(row)!=='HeyGen')return;
       const badge=row.querySelector('.pill-on,.pill-off,.pill-manual');
-      if(badge){badge.className='pill-manual';badge.textContent='مجاني';}
+      if(badge){if(badge.className!=='pill-manual')badge.className='pill-manual';if(badge.textContent!=='مجاني')badge.textContent='مجاني';}
       row.setAttribute('aria-label','فتح HeyGen Free');
     });
   }
@@ -261,7 +264,7 @@
     injectStyle();initSidebarOutsideClose();wireAll();syncSearchConsoleBadge();syncHeyGenFreeBadge();
     const grid=document.getElementById('integrationGrid'),mini=document.getElementById('integrationMini');
     const observer=new MutationObserver(()=>{wireAll();syncSearchConsoleBadge();syncHeyGenFreeBadge();});
-    if(grid)observer.observe(grid,{childList:true,subtree:true});
-    if(mini)observer.observe(mini,{childList:true,subtree:true});
+    if(grid)observer.observe(grid,{childList:true});
+    if(mini)observer.observe(mini,{childList:true});
   });
 })();
