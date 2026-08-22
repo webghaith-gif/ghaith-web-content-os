@@ -1,4 +1,4 @@
-import { GoogleDriveAdapter, type DriveChangedFile } from '../integrations/google-drive.adapter';
+import { GoogleDriveAdapter } from '../integrations/google-drive.adapter';
 import { GoogleDriveOAuthManager } from '../integrations/google-drive-oauth';
 import { Store } from '../repositories/store';
 import { NotificationService } from './notification.service';
@@ -24,50 +24,40 @@ export class DriveReportIngestionService {
   }
 
   async importPendingChanges() {
-    const changedFiles = await this.drive.consumeChanges();
-    if (!changedFiles.length) return { ok: true, scanned: 0, imported: [], ignored: [] };
-
     const rootFolderId = await this.drive.ensureExportFolder();
     if (!rootFolderId) throw new Error('Google Drive export folder is unavailable.');
     const accessToken = await this.oauth.getAccessToken();
     if (!accessToken) throw new Error('Google Drive is not authorized.');
 
+    // Advance the Drive change cursor when possible, but never depend on a webhook event.
+    // A webhook may have been consumed by an older deployment before the import logic ran.
+    try { await this.drive.consumeChanges(); }
+    catch (error) { console.warn('Drive change cursor refresh failed; direct inbox scan will continue', error); }
+
+    const candidates = await this.listRootReportFiles(rootFolderId, accessToken);
     const existingReports = await this.store.listReports();
     const imported: Array<{ reportId: string; fileId: string; title: string }> = [];
     const ignored: Array<{ fileId: string; reason: string }> = [];
 
-    for (const changed of changedFiles) {
-      if (!isSupportedReportMime(changed.mimeType)) {
-        ignored.push({ fileId: changed.id, reason: 'unsupported_mime' });
+    for (const metadata of candidates) {
+      if (!isSupportedReportMime(metadata.mimeType)) {
+        ignored.push({ fileId: metadata.id, reason: 'unsupported_mime' });
         continue;
       }
 
-      const metadata = await this.getMetadata(changed.id, accessToken);
-      if (!metadata || metadata.trashed) {
-        ignored.push({ fileId: changed.id, reason: 'missing_or_trashed' });
-        continue;
-      }
-
-      // Only direct children of the Runtime Exports root are treated as incoming reports.
-      // Generated assets/products live in child folders and must never loop back as reports.
-      if (!metadata.parents?.includes(rootFolderId)) {
-        ignored.push({ fileId: changed.id, reason: 'not_root_report' });
-        continue;
-      }
-
-      const driveUrl = metadata.webViewLink ?? changed.webViewLink ?? `https://drive.google.com/open?id=${encodeURIComponent(changed.id)}`;
-      if (existingReports.some((report) => report.googleDriveUrl?.includes(changed.id))) {
-        ignored.push({ fileId: changed.id, reason: 'already_imported' });
+      if (existingReports.some((report) => report.googleDriveUrl?.includes(metadata.id))) {
+        ignored.push({ fileId: metadata.id, reason: 'already_imported' });
         continue;
       }
 
       const body = (await this.readText(metadata, accessToken)).trim();
       if (body.length < 80) {
-        ignored.push({ fileId: changed.id, reason: 'too_short' });
+        ignored.push({ fileId: metadata.id, reason: 'too_short' });
         continue;
       }
 
-      const title = cleanTitle(metadata.name ?? changed.name);
+      const driveUrl = metadata.webViewLink ?? `https://drive.google.com/open?id=${encodeURIComponent(metadata.id)}`;
+      const title = cleanTitle(metadata.name ?? 'تقرير جديد');
       const report = await this.store.createReport({
         title,
         body,
@@ -77,7 +67,7 @@ export class DriveReportIngestionService {
         automation: { version: 1 },
       });
 
-      imported.push({ reportId: report.id, fileId: changed.id, title: report.title });
+      imported.push({ reportId: report.id, fileId: metadata.id, title: report.title });
       existingReports.push(report);
       await this.safeNotify({
         title: 'تقرير جديد دخل Ghaith Web Content OS 📥',
@@ -87,17 +77,22 @@ export class DriveReportIngestionService {
       });
     }
 
-    return { ok: true, scanned: changedFiles.length, imported, ignored };
+    return { ok: true, scanned: candidates.length, imported, ignored };
   }
 
-  private async getMetadata(fileId: string, accessToken: string): Promise<DriveFileMetadata | undefined> {
-    const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`);
-    url.searchParams.set('fields', 'id,name,mimeType,parents,webViewLink,trashed');
+  private async listRootReportFiles(rootFolderId: string, accessToken: string): Promise<DriveFileMetadata[]> {
+    const escapedParent = rootFolderId.replace(/'/g, "\\'");
+    const url = new URL('https://www.googleapis.com/drive/v3/files');
+    url.searchParams.set('q', `'${escapedParent}' in parents and trashed = false`);
+    url.searchParams.set('fields', 'files(id,name,mimeType,parents,webViewLink,trashed)');
+    url.searchParams.set('pageSize', '50');
+    url.searchParams.set('orderBy', 'modifiedTime desc');
     url.searchParams.set('supportsAllDrives', 'true');
+    url.searchParams.set('includeItemsFromAllDrives', 'true');
     const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (response.status === 404) return undefined;
-    if (!response.ok) throw new Error(`Google Drive metadata read failed: ${response.status} ${await response.text()}`);
-    return response.json() as Promise<DriveFileMetadata>;
+    if (!response.ok) throw new Error(`Google Drive inbox scan failed: ${response.status} ${await response.text()}`);
+    const data = await response.json() as { files?: DriveFileMetadata[] };
+    return (data.files ?? []).filter((file) => !file.trashed && isSupportedReportMime(file.mimeType));
   }
 
   private async readText(file: DriveFileMetadata, accessToken: string): Promise<string> {
