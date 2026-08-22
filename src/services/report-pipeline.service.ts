@@ -27,6 +27,10 @@ export class ReportPipelineService {
   async nextPendingReport() {
     const reports = await this.store.listReports();
     const pending = reports
+      // Historical Gmail summaries keep their dedicated slow backfill workflow.
+      // Excluding them here prevents a legacy backlog from consuming free AI/Drive quota
+      // when this new automation is enabled. Normal and future reports are fully automatic.
+      .filter((report) => !String(report.source ?? '').startsWith('Historical Gmail report summary'))
       .filter((report) => !report.automation?.completedAt)
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
     return pending[0] ?? null;
