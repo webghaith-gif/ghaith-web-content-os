@@ -67,7 +67,7 @@ export class ProductGenerationService {
         await this.notifications.send({
           title: 'منتج أولي جاهز للمراجعة 📦',
           body: `${product.title} — تم حفظ المسودة والهيكل في Google Drive. القرار التالي لك.`,
-          url: '/browser.html?view=products',
+          url: '/browser.html?product=1',
           tag: `product-review-${product.id}`,
         });
       } catch (error) {
