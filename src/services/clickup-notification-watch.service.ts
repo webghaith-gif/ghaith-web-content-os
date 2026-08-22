@@ -28,22 +28,23 @@ export class ClickUpNotificationWatchService {
       }
     }
     if (!saved) return { enabled: false, configured: false, active: false };
-    if (!this.clickup.enabled) return { enabled: false, configured: true, active: false, webhookId: saved.id };
+    const initial = saved;
+    if (!this.clickup.enabled) return { enabled: false, configured: true, active: false, webhookId: initial.id };
 
     try {
-      const webhooks = await this.clickup.listWebhooks(saved.workspaceId);
-      const current = webhooks.find((item) => item.id === saved.id);
+      const webhooks = await this.clickup.listWebhooks(initial.workspaceId);
+      const current = webhooks.find((item) => item.id === initial.id);
       if (!current || current.status === 'inactive') {
-        await this.ensure(saved.endpoint || canonicalWebhookEndpoint());
-        saved = await this.store.getClickUpWebhook() ?? saved;
-        const refreshed = await this.clickup.listWebhooks(saved.workspaceId);
-        const active = refreshed.find((item) => item.id === saved!.id);
+        await this.ensure(initial.endpoint || canonicalWebhookEndpoint());
+        const healed = await this.store.getClickUpWebhook() ?? initial;
+        const refreshed = await this.clickup.listWebhooks(healed.workspaceId);
+        const active = refreshed.find((item) => item.id === healed.id);
         return {
           enabled: true,
           configured: true,
           active: Boolean(active && active.status !== 'inactive'),
-          webhookId: saved.id,
-          endpoint: saved.endpoint,
+          webhookId: healed.id,
+          endpoint: healed.endpoint,
           event: 'taskStatusUpdated',
           selfHealed: true,
         };
@@ -52,8 +53,8 @@ export class ClickUpNotificationWatchService {
         enabled: true,
         configured: true,
         active: true,
-        webhookId: saved.id,
-        endpoint: saved.endpoint,
+        webhookId: initial.id,
+        endpoint: initial.endpoint,
         event: 'taskStatusUpdated',
       };
     } catch (error) {
@@ -61,8 +62,8 @@ export class ClickUpNotificationWatchService {
         enabled: true,
         configured: true,
         active: false,
-        webhookId: saved.id,
-        endpoint: saved.endpoint,
+        webhookId: initial.id,
+        endpoint: initial.endpoint,
         warning: error instanceof Error ? error.message : String(error),
       };
     }
