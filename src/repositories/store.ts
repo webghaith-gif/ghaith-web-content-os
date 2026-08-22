@@ -236,6 +236,13 @@ export class Store {
       return true;
     });
   }
+  async releaseClickUpLogTaskProcessed(taskId: string): Promise<void> {
+    await this.db.mutate((db) => {
+      const webhook = db.integrations.clickup?.webhook;
+      if (!webhook?.processedLogTaskIds) return;
+      webhook.processedLogTaskIds = webhook.processedLogTaskIds.filter((id) => id !== taskId);
+    });
+  }
 
   async getPushVapidKeys(): Promise<{ publicKey: string; privateKey: string } | undefined> {
     const state = (await this.db.read()).integrations.notifications;
