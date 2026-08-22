@@ -9,6 +9,20 @@
   const safeUrl = (value) => { try { const u = new URL(value); return ['https:', 'http:'].includes(u.protocol) ? u.href : null; } catch { return null; } };
   const label = (status) => ({ IN_REVIEW: 'للمراجعة', APPROVED: 'معتمد للتطوير', PRODUCT_READY: 'PRODUCT READY', ARCHIVED: 'مؤرشف' }[status] || status || '—');
 
+  const style = document.createElement('style');
+  style.textContent = `
+    @media(min-width:1181px){.quick-actions{grid-template-columns:repeat(6,minmax(120px,1fr))}.workflow{grid-template-columns:repeat(8,minmax(90px,1fr))}}
+    .product-safety-note{padding:16px 18px;margin-bottom:14px;border-color:#d8c17f;background:linear-gradient(135deg,#fffdfa,#fff7e2)}
+    .product-safety-note b{display:block;color:#6f5317}.product-safety-note p{margin:5px 0 0;color:var(--muted);font-size:12px;line-height:1.7}
+    .product-grid{margin-top:0}.product-card{display:flex;flex-direction:column;gap:12px}.product-card .content-title-button{font-size:16px;line-height:1.6}
+    .product-card .content-snippet{min-height:58px;color:var(--muted);font-size:12px;line-height:1.75}.product-card .content-snippet b{color:var(--text)}
+    .product-card .content-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.product-card .content-card-head small{color:var(--muted)}
+    .status-chip.APPROVED{background:#e6effd;color:#255c9f}.status-chip.PRODUCT_READY{background:#e4f7ef;color:#14734f}
+    .product-gate-banner{display:grid;gap:4px;padding:14px 16px;margin-bottom:14px;border:1px solid #e2c978;border-radius:14px;background:#fff8e5}.product-gate-banner b{color:#705419}.product-gate-banner span{font-size:12px;color:var(--muted)}
+    .product-archive-btn{color:#8e4b4b}.empty-state{grid-column:1/-1;padding:30px;text-align:center;display:grid;gap:7px}.empty-state span{font-size:28px;color:var(--gold)}.empty-state small{color:var(--muted)}
+  `;
+  document.head.appendChild(style);
+
   async function request(path, options = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 20000);
