@@ -40,7 +40,7 @@ export class ContentGenerationService {
       sourceReportId: opportunity.reportId,
       opportunityId,
       targetAudience: 'Ghaith Web audience',
-      objective: 'education/engagement/traffic/sales test',
+      objective: 'education/awareness/engagement — no product promotion before PRODUCT READY',
       platforms: platforms.map((x) => x.toLowerCase()),
       contentType: 'multi-platform-package',
       package: generated,
@@ -92,23 +92,24 @@ export class ContentGenerationService {
       [
         'You are the senior editorial and content-quality engine for Ghaith Web.',
         'Create an original, polished Arabic content package grounded strictly in the supplied source report and opportunity.',
+        'This is PRE-PRODUCT educational/awareness content. Do not promote a specific product, do not claim product features, do not imply a product is available, and do not use buy, purchase, order, or download CTAs. Product-specific marketing begins only after an explicit PRODUCT READY decision by the user.',
         'Do not invent facts, statistics, certifications, prices, legal claims, product availability, testimonials, or links not supported by the source.',
         'Prefer useful practical value over hype. Avoid repetition and generic AI wording.',
         'Return JSON only. No markdown fences.',
         'Top-level keys: hook, caption, cta, description, script, keywords, imagePrompt, videoPrompt, carouselSlides, videoScenes, platformCopies, qualityReview.',
-        'carouselSlides: exactly 5 objects. Each has title, body, points. Make the flow coherent: hook/problem -> insight -> practical steps -> value -> CTA.',
+        'carouselSlides: exactly 5 objects. Each has title, body, points. Make the flow coherent: hook/problem -> insight -> practical steps -> value -> non-commercial educational CTA.',
         'videoScenes: exactly 3 objects with title and body, optimized for a short vertical video without music.',
         'platformCopies: ALWAYS include facebook, instagram, threads, x, pinterest, tiktok, youtube.',
         'Each platform copy must be genuinely adapted, not duplicated. Keys allowed per platform: title, hook, caption, description, cta, hashtags.',
-        'Facebook: useful conversational post with context and clear CTA.',
-        'Instagram: concise visual-first caption with a strong opening and a small set of relevant hashtags.',
-        'Threads: natural conversational text, short and discussion-oriented; avoid looking like an ad unless the source goal is sales.',
+        'Facebook: useful conversational educational post with context and a non-commercial CTA.',
+        'Instagram: concise visual-first educational caption with a strong opening and a small set of relevant hashtags.',
+        'Threads: natural conversational text, short and discussion-oriented; never present a product as available.',
         'X: very concise, high-information copy suitable for the character limit; no hashtag stuffing.',
-        'Pinterest: searchable title and description, title <= 100 characters and description <= 800 characters.',
-        'TikTok: short spoken/social caption and hook that matches the video script.',
-        'YouTube: clear title plus searchable description matching a Short/video.',
+        'Pinterest: searchable educational title and description, title <= 100 characters and description <= 800 characters.',
+        'TikTok: short spoken/social educational caption and hook that matches the video script.',
+        'YouTube: clear educational title plus searchable description matching a Short/video.',
         'qualityReview: object with score from 0-100, strengths array, issuesFixed array, sourceFaithful boolean, platformAdapted boolean, nonRepetitive boolean.',
-        'Before returning, silently self-review language, spelling, source fidelity, platform fit, CTA consistency, and repetition. Fix issues first, then report the qualityReview.',
+        'Before returning, silently self-review language, spelling, source fidelity, platform fit, CTA consistency, repetition, and the pre-product non-commercial gate. Fix issues first, then report the qualityReview.',
         'Use Modern Standard Arabic that is clear to audiences in Tunisia and the Arab world unless the source itself requires a localized wording.',
       ].join(' '),
       [
@@ -172,7 +173,7 @@ function normalizePlatformCopies(value: any, fallback: Record<string, any>) {
       hook: str(raw.hook) || base.hook,
       caption: str(raw.caption) || base.caption,
       description: str(raw.description) || base.description,
-      cta: str(raw.cta) || base.cta,
+      cta: safeEducationalCta(str(raw.cta) || base.cta),
       hashtags: stringArray(raw.hashtags).slice(0, platform === 'instagram' ? 8 : 5),
     };
     if (platform === 'pinterest') {
@@ -202,9 +203,9 @@ function fallbackPackage(title: string) {
   const generic = {
     title,
     hook: title,
-    caption: `محتوى جاهز للمراجعة حول: ${title}`,
+    caption: `محتوى تعليمي جاهز للمراجعة حول: ${title}`,
     description: title,
-    cta: 'احفظ المحتوى وشاركنا رأيك.',
+    cta: 'احفظ الفكرة وشاركنا تجربتك أو سؤالك.',
     hashtags: ['غيث_ويب'],
   };
   return {
@@ -212,9 +213,9 @@ function fallbackPackage(title: string) {
     caption: generic.caption,
     cta: generic.cta,
     description: title,
-    script: `Hook: ${title}\nProblem → practical value → CTA.`,
+    script: `Hook: ${title}\nProblem → practical educational value → non-commercial CTA.`,
     keywords: [title, 'Ghaith Web'],
-    imagePrompt: `Professional branded social media visual for Ghaith Web about: ${title}`,
+    imagePrompt: `Professional branded educational social media visual for Ghaith Web about: ${title}`,
     videoPrompt: `Short vertical educational video for Ghaith Web about: ${title}; no music.`,
     carouselSlides: [
       { title, body: `لماذا يهمك هذا الموضوع؟ ${title}`, points: [] as string[] },
@@ -234,7 +235,7 @@ function fallbackPackage(title: string) {
     },
     qualityReview: {
       score: 50,
-      strengths: ['Fallback package available'],
+      strengths: ['Fallback educational package available'],
       issuesFixed: [],
       sourceFaithful: true,
       platformAdapted: false,
@@ -243,6 +244,12 @@ function fallbackPackage(title: string) {
   };
 }
 
+function safeEducationalCta(value: string): string {
+  if (/شراء|اشتر|اطلب|حمّل|تحميل|تنزيل|buy|purchase|order|download/i.test(value)) {
+    return 'احفظ الفكرة وشاركنا تجربتك أو سؤالك.';
+  }
+  return value;
+}
 function str(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
 function stringArray(value: unknown): string[] { return Array.isArray(value) ? value.map(String).map((x) => x.trim()).filter(Boolean) : []; }
 function clampScore(value: unknown): number {
