@@ -1,7 +1,10 @@
 (()=>{
   const qs=(selector,parent=document)=>parent?.querySelector?.(selector)||null;
+  const qsa=(selector,parent=document)=>[...(parent?.querySelectorAll?.(selector)||[])];
   let productHistorySeen=false;
   let notificationHistorySeen=false;
+
+  window.__GHAITH_UI_HARDENING_VERSION='19.1';
 
   function setMainHistoryButtons({back,forward}={}){
     const backBtn=qs('#navBackBtn');
@@ -80,6 +83,42 @@
     launcher?.click();
   }
 
+  async function emergencyOpenProducts(){
+    if(productModeActive())return;
+
+    qsa('.view').forEach(view=>view.classList.remove('active'));
+    qs('#view-products')?.classList.add('active');
+    qsa('.nav-item,.bottom-nav-item').forEach(item=>item.classList.remove('active'));
+    qs('#productsNavBtn')?.classList.add('active');
+    const title=qs('#pageTitle');if(title)title.textContent='مركز المنتجات';
+    const subtitle=qs('#pageSubtitle');if(subtitle)subtitle.textContent='مسودات ومنتجات تنتظر قرارك';
+    qs('#sidebar')?.classList.remove('open');
+    qs('#drawerOverlay')?.classList.remove('show');
+    document.body.classList.remove('drawer-open');
+
+    const url=new URL(location.href);
+    if(url.searchParams.get('product')!=='1'){
+      url.searchParams.set('product','1');
+      history.pushState({...history.state,product:true},'',url);
+    }
+    productHistorySeen=true;
+    setMainHistoryButtons({back:history.length>1,forward:false});
+
+    const grid=qs('#productGrid');
+    if(!grid)return;
+    grid.innerHTML='<div class="loading-row">جاري تحميل المنتجات…</div>';
+    try{
+      const response=await fetch('/api/products',{cache:'no-store',headers:{Accept:'application/json'}});
+      if(!response.ok)throw new Error(`HTTP ${response.status}`);
+      const data=await response.json();
+      const items=(Array.isArray(data)?data:[]).filter(item=>item.status!=='ARCHIVED').sort((a,b)=>+new Date(b.updatedAt||0)-+new Date(a.updatedAt||0));
+      const esc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+      grid.innerHTML=items.length?items.map(item=>`<article class="content-card product-card"><div class="content-card-head"><span class="status-chip ${esc(item.status||'')}">${esc(item.status||'—')}</span><small>${esc(item.productType||'منتج رقمي')}</small></div><div class="content-title-button">${esc(item.title||'منتج')}</div><div class="content-snippet"><b>الوعد:</b> ${esc(item.promise||'—')}</div></article>`).join(''):'<div class="panel empty-state"><span>◆</span><b>لا توجد منتجات حاليًا</b></div>';
+    }catch(error){
+      grid.innerHTML=`<div class="panel empty-state"><span>⚠</span><b>تعذر تحميل المنتجات</b><small>${String(error?.message||error)}</small></div>`;
+    }
+  }
+
   function auditKnownNavigationControls(){
     const required=[
       '#menuBtn','#sidebarCloseBtn','#refreshBtn','#navBackBtn','#navForwardBtn',
@@ -103,7 +142,10 @@
 
     const productLauncher=event.target.closest?.('#productsNavBtn,#productsQuickBtn,#productsFlowBtn,#productsReviewFlowBtn');
     if(productLauncher){
-      setTimeout(syncProductHistoryButtons,0);
+      setTimeout(()=>{
+        if(productModeActive())syncProductHistoryButtons();
+        else emergencyOpenProducts();
+      },120);
       return;
     }
 
