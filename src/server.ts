@@ -117,7 +117,7 @@ try {
           return sendJson(res, 200, await pipeline.status(match[1]!));
         }
 
-        if (method === 'POST' && url.pathname === '/api/automation/import-drive-reports') {
+        if ((method === 'POST' || method === 'GET') && url.pathname === '/api/automation/import-drive-reports') {
           return sendJson(res, 200, await driveReports.importPendingChanges());
         }
 
