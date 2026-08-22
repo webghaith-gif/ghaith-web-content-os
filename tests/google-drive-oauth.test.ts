@@ -13,7 +13,7 @@ class MemoryDb implements DatabaseBackend {
   }
 }
 
-test('Google Drive OAuth requests offline least-privilege access and stores state', async () => {
+test('Google OAuth requests offline least-privilege Drive and Search Console access and stores state', async () => {
   const snapshot = {
     clientId: env.GOOGLE_DRIVE_CLIENT_ID,
     clientSecret: env.GOOGLE_DRIVE_CLIENT_SECRET,
@@ -37,7 +37,11 @@ test('Google Drive OAuth requests offline least-privilege access and stores stat
 
     assert.equal(authorizationUrl.origin, 'https://accounts.google.com');
     assert.equal(authorizationUrl.pathname, '/o/oauth2/v2/auth');
-    assert.equal(authorizationUrl.searchParams.get('scope'), 'https://www.googleapis.com/auth/drive.file');
+    const scopes = new Set((authorizationUrl.searchParams.get('scope') ?? '').split(/\s+/).filter(Boolean));
+    assert.deepEqual(scopes, new Set([
+      'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/webmasters.readonly',
+    ]));
     assert.equal(authorizationUrl.searchParams.get('access_type'), 'offline');
     assert.equal(authorizationUrl.searchParams.get('include_granted_scopes'), 'true');
     assert.equal(authorizationUrl.searchParams.get('prompt'), 'consent');

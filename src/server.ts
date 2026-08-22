@@ -1,4 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { createApp } from './application';
 import { env } from './config/env';
 import { Store } from './repositories/store';
@@ -17,6 +19,15 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
     'Cache-Control': 'no-store',
   });
   res.end(JSON.stringify(body));
+}
+
+async function sendWebAsset(res: ServerResponse, file: string, type: string) {
+  const content = await readFile(path.join(__dirname, 'web', file));
+  res.writeHead(200, {
+    'Content-Type': type,
+    'Cache-Control': 'no-cache, must-revalidate',
+  });
+  res.end(content);
 }
 
 function header(req: IncomingMessage, name: string): string | undefined {
@@ -40,6 +51,10 @@ try {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
       const method = req.method ?? 'GET';
       const oidcToken = header(req, 'x-vercel-oidc-token');
+
+      if (method === 'GET' && url.pathname === '/products.js') {
+        return sendWebAsset(res, 'products.js', 'text/javascript; charset=utf-8');
+      }
 
       if (method === 'GET' && url.pathname === '/api/integrations/make/test') {
         try {
