@@ -3,6 +3,8 @@ import { GoogleDriveOAuthManager } from '../integrations/google-drive-oauth';
 import { Store } from '../repositories/store';
 import { NotificationService } from './notification.service';
 
+const INTAKE_NAME = 'Ghaith Web — Incoming Report';
+
 interface DriveFileMetadata {
   id: string;
   name?: string;
@@ -23,14 +25,46 @@ export class DriveReportIngestionService {
     this.notifications = new NotificationService(store);
   }
 
+  async ensureIntakeDocument() {
+    const rootFolderId = await this.drive.ensureExportFolder();
+    if (!rootFolderId) throw new Error('Google Drive export folder is unavailable.');
+    const accessToken = await this.oauth.getAccessToken();
+    if (!accessToken) throw new Error('Google Drive is not authorized.');
+
+    const escapedName = escapeDriveQuery(INTAKE_NAME);
+    const escapedParent = escapeDriveQuery(rootFolderId);
+    const listUrl = new URL('https://www.googleapis.com/drive/v3/files');
+    listUrl.searchParams.set('q', `name = '${escapedName}' and '${escapedParent}' in parents and mimeType = 'application/vnd.google-apps.document' and trashed = false`);
+    listUrl.searchParams.set('fields', 'files(id,name,mimeType,parents,webViewLink,trashed)');
+    listUrl.searchParams.set('pageSize', '10');
+    const listResponse = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!listResponse.ok) throw new Error(`Google Drive intake lookup failed: ${listResponse.status} ${await listResponse.text()}`);
+    const listed = await listResponse.json() as { files?: DriveFileMetadata[] };
+    const existing = listed.files?.find((file) => file.id && !file.trashed);
+    if (existing?.id) {
+      return { ok: true, created: false, file: existing, folderId: rootFolderId };
+    }
+
+    const createResponse = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name,mimeType,parents,webViewLink', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: INTAKE_NAME,
+        mimeType: 'application/vnd.google-apps.document',
+        parents: [rootFolderId],
+      }),
+    });
+    if (!createResponse.ok) throw new Error(`Google Drive intake creation failed: ${createResponse.status} ${await createResponse.text()}`);
+    const created = await createResponse.json() as DriveFileMetadata;
+    return { ok: true, created: true, file: created, folderId: rootFolderId };
+  }
+
   async importPendingChanges() {
     const rootFolderId = await this.drive.ensureExportFolder();
     if (!rootFolderId) throw new Error('Google Drive export folder is unavailable.');
     const accessToken = await this.oauth.getAccessToken();
     if (!accessToken) throw new Error('Google Drive is not authorized.');
 
-    // Advance the Drive change cursor when possible, but never depend on a webhook event.
-    // A webhook may have been consumed by an older deployment before the import logic ran.
     try { await this.drive.consumeChanges(); }
     catch (error) { console.warn('Drive change cursor refresh failed; direct inbox scan will continue', error); }
 
@@ -42,6 +76,11 @@ export class DriveReportIngestionService {
     for (const metadata of candidates) {
       if (!isSupportedReportMime(metadata.mimeType)) {
         ignored.push({ fileId: metadata.id, reason: 'unsupported_mime' });
+        continue;
+      }
+
+      if (metadata.name === INTAKE_NAME) {
+        ignored.push({ fileId: metadata.id, reason: 'intake_not_named_yet' });
         continue;
       }
 
@@ -81,14 +120,12 @@ export class DriveReportIngestionService {
   }
 
   private async listRootReportFiles(rootFolderId: string, accessToken: string): Promise<DriveFileMetadata[]> {
-    const escapedParent = rootFolderId.replace(/'/g, "\\'");
+    const escapedParent = escapeDriveQuery(rootFolderId);
     const url = new URL('https://www.googleapis.com/drive/v3/files');
     url.searchParams.set('q', `'${escapedParent}' in parents and trashed = false`);
     url.searchParams.set('fields', 'files(id,name,mimeType,parents,webViewLink,trashed)');
     url.searchParams.set('pageSize', '50');
     url.searchParams.set('orderBy', 'modifiedTime desc');
-    url.searchParams.set('supportsAllDrives', 'true');
-    url.searchParams.set('includeItemsFromAllDrives', 'true');
     const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!response.ok) throw new Error(`Google Drive inbox scan failed: ${response.status} ${await response.text()}`);
     const data = await response.json() as { files?: DriveFileMetadata[] };
@@ -99,7 +136,7 @@ export class DriveReportIngestionService {
     const nativeDoc = file.mimeType === 'application/vnd.google-apps.document';
     const url = nativeDoc
       ? `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}/export?mimeType=text%2Fplain`
-      : `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}?alt=media&supportsAllDrives=true`;
+      : `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}?alt=media`;
     const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!response.ok) throw new Error(`Google Drive report read failed: ${response.status} ${await response.text()}`);
     return (await response.text()).replace(/^\uFEFF/, '');
@@ -119,4 +156,8 @@ function isSupportedReportMime(mimeType?: string) {
 
 function cleanTitle(name: string) {
   return String(name || 'تقرير جديد').replace(/\.(txt|md)$/i, '').trim().slice(0, 180) || 'تقرير جديد';
+}
+
+function escapeDriveQuery(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }

@@ -9,9 +9,6 @@ import { ReportPipelineService } from './services/report-pipeline.service';
 import { DriveReportIngestionService } from './services/drive-report-ingestion.service';
 import { safeStartupDiagnostic } from './utils/startup-diagnostic';
 
-// Lightweight extension routes intentionally wrap the stable application instead of
-// changing the publishing core. This keeps report/product automation isolated from
-// ClickUp -> Make -> publishing behavior.
 function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -110,6 +107,10 @@ try {
 
         if (method === 'GET' && url.pathname === '/api/automation/reports/next') {
           return sendJson(res, 200, { report: await pipeline.nextPendingReport() });
+        }
+
+        if (method === 'GET' && url.pathname === '/api/automation/report-intake') {
+          return sendJson(res, 200, await driveReports.ensureIntakeDocument());
         }
 
         match = url.pathname.match(/^\/api\/automation\/reports\/([^/]+)\/status$/);
