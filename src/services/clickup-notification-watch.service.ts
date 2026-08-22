@@ -156,7 +156,7 @@ export class ClickUpNotificationWatchService {
 
     // Make creates [LOG] ... ERROR/WARNING tasks in the same ClickUp List.
     // ClickUp emits taskStatusUpdated when a new task is created, so the existing
-    // webhook is enough; Make itself remains untouched.
+    // production webhook is enough; Make itself and its router remain untouched.
     if (!becamePublished) {
       const logResult = await this.notifyMakeProblemLog(taskId);
       if (logResult.handled) return { ok: true, taskId, ...logResult };
