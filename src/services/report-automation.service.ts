@@ -25,7 +25,8 @@ export class ReportAutomationService {
     const content = pickContent(reportContents, report.automation?.contentId);
     const product = pickProduct(reportProducts, report.automation?.productId);
     const assetsReady = Boolean(content && hasReviewableMedia(content));
-    const complete = Boolean(report.googleDriveUrl && reportOpportunities.length && content && assetsReady && product?.googleDriveUrl);
+    const productReadyForReview = Boolean(product?.googleDriveUrl || report.automation?.productSkippedAt);
+    const complete = Boolean(report.googleDriveUrl && reportOpportunities.length && content && assetsReady && productReadyForReview);
     return {
       report,
       archived: Boolean(report.googleDriveUrl),
@@ -34,7 +35,8 @@ export class ReportAutomationService {
       contentReady: Boolean(content),
       contentId: content?.id,
       assetsReady,
-      productReadyForReview: Boolean(product?.googleDriveUrl),
+      productReadyForReview,
+      productSkipped: Boolean(report.automation?.productSkippedAt),
       productId: product?.id,
       complete,
     };
@@ -117,7 +119,9 @@ export class ReportAutomationService {
     const product = current.productId ? await this.store.getProduct(current.productId).catch(() => undefined) : undefined;
     await this.safeNotify({
       title: 'اكتملت معالجة التقرير آليًا ✅',
-      body: `${report.title} — التقرير محفوظ، الفرص مستخرجة، المحتوى والأصول جاهزة للمراجعة، والمنتج الأولي محفوظ. الآن القرار التالي لك.`,
+      body: current.productSkipped
+        ? `${report.title} — المحتوى والأصول جاهزة للمراجعة، وقرر GPT أن هذه الفرصة لا تحتاج منتجًا مستقلًا. الآن القرار التالي لك.`
+        : `${report.title} — التقرير محفوظ، الفرص مستخرجة، المحتوى والأصول جاهزة للمراجعة، والمنتج الأولي محفوظ. الآن القرار التالي لك.`,
       url: this.driveViewer.linkForDriveUrl(product?.googleDriveUrl)
         ?? this.driveViewer.linkForDriveUrl(report.googleDriveUrl)
         ?? '/browser.html?view=reports',
