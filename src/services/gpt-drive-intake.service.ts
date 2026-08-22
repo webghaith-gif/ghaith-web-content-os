@@ -4,6 +4,7 @@ import { NotificationService } from './notification.service';
 import { GptPackageIntakeService, type GptPackageIntakeInput } from './gpt-package-intake.service';
 
 const GPT_PACKAGE_PREFIX = 'Ghaith Web GPT Package —';
+const PROCESSED_MARKER = '[PROCESSED]';
 
 type GptDriveManifest = GptPackageIntakeInput & {
   reportId?: string;
@@ -33,6 +34,10 @@ interface DriveManifestFile {
  * This lets the ChatGPT automation write the report and the package in the same run without
  * waiting for the GitHub/Vercel pipeline to finish opportunity extraction first.
  *
+ * Successfully consumed files receive a durable [PROCESSED] suffix in Drive. This prevents an
+ * older manifest from being re-consumed after a newer revision replaces the content's media list.
+ * Failed/waiting manifests keep their original name and are retried safely.
+ *
  * Canva remains the editable visual library, Drive the durable handoff/archive, and
  * Ghaith Web Content OS the coordinator. No Gemini/OpenAI API call is made here.
  */
@@ -60,6 +65,7 @@ export class GptDriveIntakeService {
     for (const file of candidates) {
       if (contents.some((content) => content.assets.some((asset) => asset.provider === 'google-drive' && asset.providerId === file.id))) {
         ignored.push({ fileId: file.id, reason: 'already_imported' });
+        await this.markProcessed(file, accessToken).catch((error) => console.warn(`Could not mark GPT package ${file.id} processed`, error));
         continue;
       }
 
@@ -95,6 +101,8 @@ export class GptDriveIntakeService {
           opportunityId: result.opportunityId,
           title: result.content.title,
         });
+
+        await this.markProcessed(file, accessToken).catch((error) => console.warn(`Could not mark GPT package ${file.id} processed`, error));
 
         await this.safeNotify({
           title: 'حزمة GPT + Canva وصلت إلى التطبيق ✅',
@@ -144,7 +152,11 @@ export class GptDriveIntakeService {
     const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!response.ok) throw new Error(`Google Drive GPT package scan failed: ${response.status} ${await response.text()}`);
     const data = await response.json() as { files?: DriveManifestFile[] };
-    return (data.files ?? []).filter((file) => !file.trashed && isSupportedManifestMime(file.mimeType));
+    return (data.files ?? []).filter((file) =>
+      !file.trashed
+      && isSupportedManifestMime(file.mimeType)
+      && !String(file.name ?? '').includes(PROCESSED_MARKER)
+    );
   }
 
   private async readText(file: DriveManifestFile, accessToken: string): Promise<string> {
@@ -155,6 +167,17 @@ export class GptDriveIntakeService {
     const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!response.ok) throw new Error(`Google Drive GPT package read failed: ${response.status} ${await response.text()}`);
     return (await response.text()).replace(/^\uFEFF/, '').trim();
+  }
+
+  private async markProcessed(file: DriveManifestFile, accessToken: string) {
+    const name = String(file.name ?? '').trim();
+    if (!name || name.includes(PROCESSED_MARKER)) return;
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}?fields=id,name`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `${name} ${PROCESSED_MARKER}` }),
+    });
+    if (!response.ok) throw new Error(`Google Drive GPT package processed marker failed: ${response.status} ${await response.text()}`);
   }
 
   private async safeNotify(notification: { title: string; body: string; url: string; tag: string }) {
