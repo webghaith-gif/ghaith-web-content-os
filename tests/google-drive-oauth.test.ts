@@ -13,7 +13,7 @@ class MemoryDb implements DatabaseBackend {
   }
 }
 
-test('Google Drive OAuth requests offline least-privilege access and stores state', async () => {
+test('Google Drive OAuth requests offline read-only visibility plus app-file write access and stores state', async () => {
   const snapshot = {
     clientId: env.GOOGLE_DRIVE_CLIENT_ID,
     clientSecret: env.GOOGLE_DRIVE_CLIENT_SECRET,
@@ -26,7 +26,10 @@ test('Google Drive OAuth requests offline least-privilege access and stores stat
   try {
     env.GOOGLE_DRIVE_CLIENT_ID = 'test-client-id';
     env.GOOGLE_DRIVE_CLIENT_SECRET = 'test-client-secret';
-    env.GOOGLE_DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.file';
+    env.GOOGLE_DRIVE_SCOPES = [
+      'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/drive.readonly',
+    ].join(' ');
     env.GOOGLE_DRIVE_ACCESS_TOKEN = undefined;
     env.GOOGLE_DRIVE_REFRESH_TOKEN = undefined;
     env.GOOGLE_DRIVE_FOLDER_ID = undefined;
@@ -37,7 +40,11 @@ test('Google Drive OAuth requests offline least-privilege access and stores stat
 
     assert.equal(authorizationUrl.origin, 'https://accounts.google.com');
     assert.equal(authorizationUrl.pathname, '/o/oauth2/v2/auth');
-    assert.equal(authorizationUrl.searchParams.get('scope'), 'https://www.googleapis.com/auth/drive.file');
+    const scopes = new Set((authorizationUrl.searchParams.get('scope') ?? '').split(/\s+/).filter(Boolean));
+    assert.ok(scopes.has('https://www.googleapis.com/auth/drive.file'));
+    assert.ok(scopes.has('https://www.googleapis.com/auth/drive.readonly'));
+    assert.ok(scopes.has('https://www.googleapis.com/auth/webmasters.readonly'));
+    assert.equal(scopes.has('https://www.googleapis.com/auth/drive'), false, 'Full Drive write scope must not be requested');
     assert.equal(authorizationUrl.searchParams.get('access_type'), 'offline');
     assert.equal(authorizationUrl.searchParams.get('include_granted_scopes'), 'true');
     assert.equal(authorizationUrl.searchParams.get('prompt'), 'consent');
