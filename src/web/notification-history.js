@@ -2,6 +2,7 @@
   const DB_NAME='ghaith-web-notifications-v1';
   const STORE_NAME='events';
   const LOCAL_KEY='ghaith-web-notification-events-v1';
+  const PUSH_SCOPE='/push/';
 
   const esc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
   const fmt=value=>{try{return new Intl.DateTimeFormat('ar-TN',{dateStyle:'short',timeStyle:'short'}).format(new Date(value))}catch{return ''}};
@@ -41,10 +42,18 @@
   function dedupe(items){
     const seen=new Set();
     return items.filter(item=>{
-      const key=item.id||`${item.tag||''}|${item.title||''}|${item.body||''}|${item.at||item.receivedAt||''}`;
+      const key=`${item.title||''}|${item.body||''}|${item.url||''}`;
       if(seen.has(key))return false;
       seen.add(key);return true;
     });
+  }
+
+  async function refreshPushWorker(){
+    if(!('serviceWorker'in navigator))return;
+    try{
+      const registration=await navigator.serviceWorker.getRegistration(PUSH_SCOPE);
+      if(registration)await registration.update();
+    }catch{}
   }
 
   async function renderHistory(){
@@ -63,13 +72,17 @@
   navigator.serviceWorker?.addEventListener?.('message',event=>{
     if(event.data?.type==='GHAITH_PUSH_RECEIVED')setTimeout(renderHistory,20);
   });
-  window.addEventListener('focus',()=>setTimeout(renderHistory,20));
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(renderHistory,20)});
+  window.addEventListener('focus',()=>{refreshPushWorker();setTimeout(renderHistory,20)});
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){refreshPushWorker();setTimeout(renderHistory,20)}});
 
   const observer=new MutationObserver(()=>{
     const panel=document.querySelector('.gw-notify-panel.show');
     if(panel)renderHistory();
   });
-  const start=()=>{observer.observe(document.body,{attributes:true,subtree:true,attributeFilter:['class']});renderHistory()};
+  const start=()=>{
+    observer.observe(document.body,{attributes:true,subtree:true,attributeFilter:['class']});
+    refreshPushWorker();
+    renderHistory();
+  };
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
