@@ -1,4 +1,4 @@
-const CACHE='ghaith-web-content-os-v17';
+const CACHE='ghaith-web-content-os-v18';
 const STATIC=['/','/styles.css?v=12','/app.js?v=12','/notifications.js?v=12','/manifest.webmanifest','/icon.svg'];
 const DEFAULT_ICON='/icon.svg';
 const HISTORY_DB='ghaith-web-notifications-v1';
