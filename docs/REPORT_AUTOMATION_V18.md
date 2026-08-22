@@ -29,3 +29,4 @@ For each normal/new report, the resumable workflow prepares one durable stage at
 - Historical Gmail summary backfill remains isolated from this new automatic path to avoid consuming free AI/Drive quota unexpectedly.
 - Stage timestamps and product/opportunity/content links are stored with the report so repeated runs skip completed work.
 - Errors are recorded and pushed as notifications; the next scheduled run retries from the first incomplete stage.
+- Production rollout is triggered from `main` only after preview builds/typechecks are green; the previous production deployment remains available as rollback protection until the new deployment is READY.
