@@ -224,6 +224,18 @@ export class Store {
       db.integrations.clickup.webhook = webhook;
     });
   }
+  async markClickUpLogTaskProcessed(taskId: string): Promise<boolean> {
+    return this.db.mutate((db) => {
+      db.integrations.clickup ??= {};
+      const webhook = db.integrations.clickup.webhook;
+      if (!webhook) return false;
+      webhook.processedLogTaskIds ??= [];
+      if (webhook.processedLogTaskIds.includes(taskId)) return false;
+      webhook.processedLogTaskIds.push(taskId);
+      if (webhook.processedLogTaskIds.length > 250) webhook.processedLogTaskIds.splice(0, webhook.processedLogTaskIds.length - 250);
+      return true;
+    });
+  }
 
   async getPushVapidKeys(): Promise<{ publicKey: string; privateKey: string } | undefined> {
     const state = (await this.db.read()).integrations.notifications;
