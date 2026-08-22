@@ -45,6 +45,7 @@ export interface ClickUpWebhookState {
   workspaceId: string;
   listId: string;
   createdAt: string;
+  processedLogTaskIds?: string[];
 }
 
 export interface PushSubscriptionState {
