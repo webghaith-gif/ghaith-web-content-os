@@ -1,5 +1,5 @@
-const CACHE='ghaith-web-content-os-v16';
-const STATIC=['/','/styles.css?v=12','/app.js?v=12','/notifications.js?v=12','/manifest.webmanifest','/icon.svg'];
+const CACHE='ghaith-web-content-os-v18';
+const STATIC=['/','/styles.css?v=18','/app.js?v=18','/products.js?v=18','/notifications.js?v=18','/manifest.webmanifest','/icon.svg'];
 const DEFAULT_ICON='/icon.svg';
 
 self.addEventListener('install',event=>{
