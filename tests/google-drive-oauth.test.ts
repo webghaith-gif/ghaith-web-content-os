@@ -13,7 +13,7 @@ class MemoryDb implements DatabaseBackend {
   }
 }
 
-test('Google Drive OAuth requests offline read-only visibility plus app-file write access and stores state', async () => {
+test('Google Drive OAuth always requests offline read-only visibility plus app-file write access and stores state', async () => {
   const snapshot = {
     clientId: env.GOOGLE_DRIVE_CLIENT_ID,
     clientSecret: env.GOOGLE_DRIVE_CLIENT_SECRET,
@@ -26,10 +26,8 @@ test('Google Drive OAuth requests offline read-only visibility plus app-file wri
   try {
     env.GOOGLE_DRIVE_CLIENT_ID = 'test-client-id';
     env.GOOGLE_DRIVE_CLIENT_SECRET = 'test-client-secret';
-    env.GOOGLE_DRIVE_SCOPES = [
-      'https://www.googleapis.com/auth/drive.file',
-      'https://www.googleapis.com/auth/drive.readonly',
-    ].join(' ');
+    // Simulate a stale production env override that still contains only drive.file.
+    env.GOOGLE_DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.file';
     env.GOOGLE_DRIVE_ACCESS_TOKEN = undefined;
     env.GOOGLE_DRIVE_REFRESH_TOKEN = undefined;
     env.GOOGLE_DRIVE_FOLDER_ID = undefined;
