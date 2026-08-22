@@ -4,11 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b1f3a" />
-  <meta name="description" content="Ghaith Web Content OS — من الذكاء إلى النشر العام" />
+  <meta name="description" content="Ghaith Web Content OS — من التقرير إلى القرار" />
   <title>Ghaith Web Content OS</title>
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="/styles.css?v=12" />
+  <link rel="stylesheet" href="/styles.css?v=18" />
 </head>
 <body>
 <div class="app-shell">
@@ -26,6 +26,7 @@
       <button class="nav-item" type="button" data-view="reports"><span class="nav-icon">▤</span><span>التقارير</span><b id="navReportsCount">0</b></button>
       <button class="nav-item" type="button" data-view="opportunities"><span class="nav-icon">✦</span><span>الفرص</span><b id="navOpportunitiesCount">0</b></button>
       <button class="nav-item" type="button" data-view="content"><span class="nav-icon">▣</span><span>المحتوى</span><b id="navContentCount">0</b></button>
+      <button class="nav-item" id="productsNavBtn" type="button"><span class="nav-icon">◆</span><span>المنتجات</span><b id="navProductsCount">0</b></button>
       <button class="nav-item" type="button" data-view="logs"><span class="nav-icon">≡</span><span>سجل النشر</span><b id="navLogsCount">0</b></button>
       <button class="nav-item" type="button" data-view="integrations"><span class="nav-icon">⛓</span><span>التكاملات</span><b id="navIntegrationsCount">0</b></button>
       <button class="nav-item" id="notificationLaunchBtn" type="button"><span class="nav-icon">🔔</span><span>الإشعارات</span></button>
@@ -33,7 +34,7 @@
 
     <div class="sidebar-foot">
       <div class="mini-status"><i id="systemDot"></i><span id="systemStatus">جاري الفحص…</span></div>
-      <small>Reports → Opportunities → Content → ClickUp → Make → Public</small>
+      <small>Reports → Opportunities → Content/Assets + Product Draft → Human Review → READY → Make</small>
     </div>
   </aside>
   <div class="drawer-overlay" id="drawerOverlay"></div>
@@ -46,7 +47,7 @@
           <button class="icon-btn nav-arrow" id="navBackBtn" type="button" aria-label="الرجوع" title="رجوع" disabled>→</button>
           <button class="icon-btn nav-arrow" id="navForwardBtn" type="button" aria-label="التقدم" title="تقدّم" disabled>←</button>
         </div>
-        <div class="title-copy"><h1 id="pageTitle">لوحة التحكم</h1><p id="pageSubtitle">متابعة المنظومة من الفكرة حتى النشر</p></div>
+        <div class="title-copy"><h1 id="pageTitle">لوحة التحكم</h1><p id="pageSubtitle">متابعة المنظومة من التقرير حتى قرارك</p></div>
       </div>
       <div class="top-actions">
         <button class="btn ghost" id="installBtn" hidden>تثبيت التطبيق</button>
@@ -59,30 +60,32 @@
       <div class="hero panel">
         <div class="hero-copy">
           <span class="eyebrow">GHAITH WEB CONTENT OS</span>
-          <h2>مركز تشغيل فعلي — وليس لوحة عرض فقط</h2>
-          <p>افتح التقارير والفرص والمحتوى والتكاملات من البطاقات نفسها، وتابع حالة النشر من مكان واحد.</p>
+          <h2>التقرير يدخل مرة واحدة — والمنظومة تجهّز لك ما يحتاج قرارك</h2>
+          <p>التقرير يُحفظ في Drive، تُستخرج منه الفرص، ثم يُجهّز محتوى تعليمي وأصول ومنتج أولي للمراجعة. لا نشر ولا بيع قبل قرارك.</p>
         </div>
         <button class="hero-state interactive-card" type="button" data-view-link="integrations">
-          <span>وضع النشر</span><strong id="publishMode">جاري الفحص…</strong><small>اضغط لفتح التكاملات</small>
+          <span>وضع النشر</span><strong id="publishMode">جاري الفحص…</strong><small>بوابة النشر ما زالت مستقلة</small>
         </button>
       </div>
 
       <section class="quick-actions" aria-label="إجراءات سريعة">
-        <button type="button" class="quick-action primary-action" data-open="reportModal"><span>＋</span><b>تقرير جديد</b><small>ابدأ من تقرير أو فكرة</small></button>
+        <button type="button" class="quick-action primary-action" data-open="reportModal"><span>＋</span><b>تقرير جديد</b><small>الإدخال يبدأ منه آليًا</small></button>
         <button type="button" class="quick-action" data-view-link="reports"><span>▤</span><b>فتح التقارير</b><small id="quickReportsText">عرض كل التقارير</small></button>
         <button type="button" class="quick-action" data-view-link="opportunities"><span>✦</span><b>بنك الفرص</b><small id="quickOpportunitiesText">عرض الفرص</small></button>
-        <button type="button" class="quick-action" data-view-link="content"><span>▣</span><b>خط المحتوى</b><small id="quickContentText">المراجعة والجاهزية</small></button>
+        <button type="button" class="quick-action" data-view-link="content"><span>▣</span><b>خط المحتوى</b><small id="quickContentText">المراجعة والأصول</small></button>
+        <button type="button" class="quick-action" id="productsQuickBtn"><span>◆</span><b>المنتجات</b><small id="quickProductsText">مسودات للمراجعة</small></button>
         <button type="button" class="quick-action" data-view-link="integrations"><span>⛓</span><b>التكاملات</b><small id="quickIntegrationsText">عرض كل الاتصالات</small></button>
       </section>
 
       <div class="workflow panel" id="workflow">
-        <button class="flow-step" type="button" data-view-link="reports"><b>1</b><span>Reports</span><small>التقارير</small></button>
+        <button class="flow-step" type="button" data-view-link="reports"><b>1</b><span>Reports</span><small>Drive</small></button>
         <button class="flow-step" type="button" data-view-link="opportunities"><b>2</b><span>Opportunities</span><small>الفرص</small></button>
-        <button class="flow-step" type="button" data-view-link="content"><b>3</b><span>Content</span><small>المحتوى</small></button>
-        <button class="flow-step" type="button" data-view-link="content" data-content-status="IN_REVIEW"><b>4</b><span>IN REVIEW</span><small>المراجعة</small></button>
-        <button class="flow-step accent" type="button" data-view-link="content" data-content-status="READY"><b>5</b><span>ClickUp READY</span><small>جاهز</small></button>
-        <button class="flow-step accent" type="button" data-view-link="integrations"><b>6</b><span>Make</span><small>الأتمتة</small></button>
-        <button class="flow-step success" type="button" data-view-link="content" data-content-status="PUBLISHED"><b>7</b><span>PUBLISHED</span><small>منشور</small></button>
+        <button class="flow-step" type="button" data-view-link="content"><b>3</b><span>Content + Assets</span><small>تعليمي</small></button>
+        <button class="flow-step" id="productsFlowBtn" type="button"><b>4</b><span>Product Draft</span><small>منتج أولي</small></button>
+        <button class="flow-step" id="productsReviewFlowBtn" type="button"><b>5</b><span>Human Review</span><small>قرارك</small></button>
+        <button class="flow-step accent" type="button" data-view-link="content" data-content-status="READY"><b>6</b><span>ClickUp READY</span><small>بموافقتك</small></button>
+        <button class="flow-step accent" type="button" data-view-link="integrations"><b>7</b><span>Make</span><small>النشر</small></button>
+        <button class="flow-step success" type="button" data-view-link="content" data-content-status="PUBLISHED"><b>8</b><span>PUBLISHED</span><small>منشور</small></button>
       </div>
 
       <div class="metrics-grid" id="metricsGrid"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></div>
@@ -101,7 +104,7 @@
 
     <section class="view" id="view-reports">
       <div class="section-toolbar">
-        <div><span class="section-kicker">INTELLIGENCE</span><h2>التقارير والذكاء</h2><p>كل تقرير قابل للفتح والقراءة والحفظ في Drive واستخراج الفرص منه.</p></div>
+        <div><span class="section-kicker">INTELLIGENCE</span><h2>التقارير والذكاء</h2><p>كل تقرير جديد يُحفظ في Drive وتتابعه الأتمتة حتى تصبح مخرجاته جاهزة لقرارك.</p></div>
         <div class="toolbar-actions"><button class="btn ghost" id="archiveAllReportsBtn" type="button">حفظ الكل في Drive</button><button class="btn primary" type="button" data-open="reportModal">+ إضافة تقرير</button></div>
       </div>
       <div id="reportsCards" class="mobile-cards"></div>
@@ -109,16 +112,25 @@
     </section>
 
     <section class="view" id="view-opportunities">
-      <div class="section-toolbar"><div><span class="section-kicker">OPPORTUNITIES</span><h2>بنك الفرص</h2><p>افتح أي فرصة ثم حوّلها مباشرة إلى حزمة محتوى للمنصات المطلوبة.</p></div><span class="badge" id="opportunityCount">0 فرصة</span></div>
+      <div class="section-toolbar"><div><span class="section-kicker">OPPORTUNITIES</span><h2>بنك الفرص</h2><p>الفرص المستخرجة من التقارير. الأتمتة تختار الأقوى، ويمكنك دائمًا مراجعة البقية.</p></div><span class="badge" id="opportunityCount">0 فرصة</span></div>
       <div class="cards-grid" id="opportunityGrid"></div>
     </section>
 
     <section class="view" id="view-content">
       <div class="section-toolbar">
-        <div><span class="section-kicker">CONTENT PIPELINE</span><h2>خط إنتاج المحتوى</h2><p>التفاصيل والأصول والمراجعة وREADY والتسليم إلى ClickUp وMake.</p></div>
+        <div><span class="section-kicker">CONTENT PIPELINE</span><h2>خط إنتاج المحتوى</h2><p>المحتوى التلقائي قبل PRODUCT READY تعليمي/توعوي فقط. READY والنشر يبقيان بقرارك.</p></div>
         <select id="contentFilter" class="select" aria-label="تصفية المحتوى"><option value="ALL">كل الحالات</option><option>IN_REVIEW</option><option>READY</option><option>PUBLISHED</option><option>DRAFT</option><option>IN_PROGRESS</option><option>ARCHIVED</option></select>
       </div>
       <div id="contentGrid" class="content-grid"></div>
+    </section>
+
+    <section class="view" id="view-products">
+      <div class="section-toolbar">
+        <div><span class="section-kicker">PRODUCT LAB</span><h2>مركز المنتجات</h2><p>منتجات أولية مولّدة من التقارير ومحفوظة في Drive. راجعيها ثم اختاري: اعتماد للتطوير أو أرشفة. لا شيء يصبح PRODUCT READY آليًا.</p></div>
+        <span class="badge" id="productCount">0 منتج</span>
+      </div>
+      <div class="panel product-safety-note"><b>بوابة القرار البشري مفعّلة</b><p>إنشاء المسودة تلقائي، أمّا الاعتماد النهائي والتسويق والبيع فتبقى بقرارك.</p></div>
+      <div id="productGrid" class="content-grid product-grid"><div class="loading-row">جاري تحميل المنتجات…</div></div>
     </section>
 
     <section class="view" id="view-logs">
@@ -131,7 +143,7 @@
       <div class="section-toolbar"><div><span class="section-kicker">INTEGRATIONS</span><h2>مركز التكاملات</h2><p>كل الأدوات في مكان واحد مع الحالة الفعلية والإجراء الممكن.</p></div><button class="btn ghost" id="refreshIntegrationsBtn" type="button">↻ فحص الاتصالات</button></div>
       <div class="integration-summary" id="integrationSummary"></div>
       <div class="integration-grid" id="integrationGrid"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></div>
-      <div class="panel note-panel"><h3>المسار التشغيلي الحالي</h3><p><b>Ghaith Web → ClickUp READY → Make Watch Tasks → المنصة → PUBLISHED → SUCCESS</b></p><p>لا يتم عرض أي اتصال على أنه «جاهز» إلا عندما توجد إشارة فعلية تدعمه، وما هو يدوي يظهر بوضوح كـ «يدوي».</p></div>
+      <div class="panel note-panel"><h3>المسار التشغيلي الحالي</h3><p><b>Ghaith Web → مراجعتك → ClickUp READY → Make Watch Tasks → المنصة → PUBLISHED → SUCCESS</b></p><p>الأتمتة الجديدة تجهّز مواد القرار ولا تتجاوز بوابة المراجعة أو النشر.</p></div>
     </section>
   </main>
 </div>
@@ -146,12 +158,12 @@
 
 <div class="modal-backdrop" id="modalBackdrop"></div>
 <div class="modal" id="reportModal" aria-hidden="true">
-  <div class="modal-head"><div><h3>إضافة تقرير</h3><p>الصق التقرير، وسيتم حفظه ثم أرشفته في Drive.</p></div><button class="icon-btn" type="button" data-close>×</button></div>
+  <div class="modal-head"><div><h3>إضافة تقرير</h3><p>الصق التقرير مرة واحدة؛ سيُحفظ في Drive وتبدأ معالجته الآلية.</p></div><button class="icon-btn" type="button" data-close>×</button></div>
   <form id="reportForm" class="form-grid">
     <label>العنوان<input name="title" required placeholder="عنوان التقرير" /></label>
     <label>المصدر<input name="source" placeholder="Daily Intelligence / Manual" /></label>
     <label class="full">نص التقرير<textarea name="body" required rows="12" placeholder="الصق التقرير هنا…"></textarea></label>
-    <div class="form-actions full"><button type="button" class="btn ghost" data-close>إلغاء</button><button class="btn primary">حفظ التقرير</button></div>
+    <div class="form-actions full"><button type="button" class="btn ghost" data-close>إلغاء</button><button class="btn primary">حفظ التقرير وبدء المسار</button></div>
   </form>
 </div>
 
@@ -167,6 +179,11 @@
 <div class="modal wide" id="contentModal" aria-hidden="true">
   <div class="modal-head"><div><h3 id="contentModalTitle">تفاصيل المحتوى</h3><p id="contentModalMeta"></p></div><button class="icon-btn" type="button" data-close>×</button></div>
   <div id="contentModalBody"></div>
+</div>
+
+<div class="modal wide" id="productModal" aria-hidden="true">
+  <div class="modal-head"><div><h3 id="productModalTitle">تفاصيل المنتج</h3><p id="productModalMeta"></p></div><button class="icon-btn" type="button" data-close>×</button></div>
+  <div id="productModalBody"></div>
 </div>
 
 <div class="modal wide" id="reportDetailsModal" aria-hidden="true">
@@ -185,7 +202,8 @@
 </div>
 
 <div id="toastHost" class="toast-host"></div>
-<script src="/app.js?v=12"></script>
-<script src="/notifications.js?v=12"></script>
+<script src="/app.js?v=18"></script>
+<script src="/products.js?v=18"></script>
+<script src="/notifications.js?v=18"></script>
 </body>
 </html>
