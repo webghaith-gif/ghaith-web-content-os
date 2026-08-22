@@ -4,6 +4,7 @@ import { NotFoundError } from '../core/errors';
 import type {
   CanvaOAuthPendingState,
   CanvaOAuthTokenState,
+  ClickUpWebhookState,
   DatabaseBackend,
   GoogleDriveOAuthPendingState,
   GoogleDriveOAuthTokenState,
@@ -211,6 +212,16 @@ export class Store {
     await this.db.mutate((db) => {
       db.integrations.googleDrive ??= {};
       db.integrations.googleDrive.watch = watch;
+    });
+  }
+
+  async getClickUpWebhook(): Promise<ClickUpWebhookState | undefined> {
+    return (await this.freshRead()).integrations.clickup?.webhook;
+  }
+  async setClickUpWebhook(webhook: ClickUpWebhookState | undefined): Promise<void> {
+    await this.db.mutate((db) => {
+      db.integrations.clickup ??= {};
+      db.integrations.clickup.webhook = webhook;
     });
   }
 
