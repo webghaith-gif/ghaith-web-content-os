@@ -7,6 +7,11 @@ import { ProductGenerationService } from './product-generation.service';
 import { ReportArchiveService } from './report-archive.service';
 import { ReportAutomationService } from './report-automation.service';
 
+// v18 starts automatic preparation for reports arriving from this deployment window onward.
+// Reports that already have automation state are also resumable. This prevents a legacy
+// normal-report backlog from unexpectedly consuming free AI/Drive quota after rollout.
+const AUTO_PIPELINE_CUTOVER = Date.parse('2026-08-22T09:00:00Z');
+
 export class ReportPipelineService {
   private readonly intelligence: IntelligenceService;
   private readonly generation: ContentGenerationService;
@@ -27,10 +32,8 @@ export class ReportPipelineService {
   async nextPendingReport() {
     const reports = await this.store.listReports();
     const pending = reports
-      // Historical Gmail summaries keep their dedicated slow backfill workflow.
-      // Excluding them here prevents a legacy backlog from consuming free AI/Drive quota
-      // when this new automation is enabled. Normal and future reports are fully automatic.
       .filter((report) => !String(report.source ?? '').startsWith('Historical Gmail report summary'))
+      .filter((report) => Boolean(report.automation) || +new Date(report.createdAt) >= AUTO_PIPELINE_CUTOVER)
       .filter((report) => !report.automation?.completedAt)
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
     return pending[0] ?? null;
@@ -72,7 +75,7 @@ export class ReportPipelineService {
           ok: true,
           idle: false,
           reportId: report.id,
-          stage: (content.assets?.length ?? 0) > 0 ? 'CONTENT_AND_ASSETS_READY' : 'CONTENT_READY',
+          stage: hasGeneratedMedia(content) ? 'CONTENT_AND_ASSETS_READY' : 'CONTENT_READY',
           contentId: content.id,
         };
       }
@@ -113,4 +116,8 @@ export class ReportPipelineService {
   async archiveProduct(productId: string) {
     return this.products.archiveProduct(productId);
   }
+}
+
+function hasGeneratedMedia(content: { assets: Array<{ kind: string }> }): boolean {
+  return content.assets.some((asset) => ['image', 'carousel', 'video'].includes(asset.kind));
 }
