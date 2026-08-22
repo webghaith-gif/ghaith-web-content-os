@@ -5,7 +5,11 @@ import { GptPackageIntakeService, type GptPackageIntakeInput } from './gpt-packa
 
 const GPT_PACKAGE_PREFIX = 'Ghaith Web GPT Package —';
 
-type GptDriveManifest = GptPackageIntakeInput & { reportId?: string };
+type GptDriveManifest = GptPackageIntakeInput & {
+  reportId?: string;
+  /** Use "none" only when GPT deliberately concludes that the selected opportunity should not create a product. */
+  productDecision?: 'draft' | 'none';
+};
 
 interface DriveManifestFile {
   id: string;
@@ -76,6 +80,15 @@ export class GptDriveIntakeService {
         parsed.content.assets = [...(parsed.content.assets ?? []), manifestAsset];
 
         const result = await this.intake.ingest(parsed);
+        if (!parsed.product && parsed.productDecision === 'none') {
+          await this.store.patchReportAutomation(result.reportId, {
+            productSkippedAt: new Date().toISOString(),
+            productReadyForReviewAt: new Date().toISOString(),
+            lastError: undefined,
+            lastErrorAt: undefined,
+          });
+        }
+
         imported.push({
           fileId: file.id,
           contentId: result.content.id,
@@ -85,7 +98,9 @@ export class GptDriveIntakeService {
 
         await this.safeNotify({
           title: 'حزمة GPT + Canva وصلت إلى التطبيق ✅',
-          body: `${result.content.title} — تم ربط كل بصرية بنص المنصة المناسب وحفظ النسخة التشغيلية في Drive.`,
+          body: parsed.productDecision === 'none' && !parsed.product
+            ? `${result.content.title} — تم ربط البصريات بالنصوص وحفظها في Drive؛ لا يوجد منتج لهذه الفرصة بقرار GPT.`
+            : `${result.content.title} — تم ربط كل بصرية بنص المنصة المناسب وحفظ النسخة التشغيلية في Drive.`,
           url: '/browser.html?view=content',
           tag: `gpt-drive-intake-${file.id}`,
         });
