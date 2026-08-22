@@ -1,22 +1,6 @@
 {
   "rewrites": [
     {
-      "source": "/app",
-      "destination": "/"
-    },
-    {
-      "source": "/app/",
-      "destination": "/"
-    },
-    {
-      "source": "/browser",
-      "destination": "/"
-    },
-    {
-      "source": "/browser/",
-      "destination": "/"
-    },
-    {
       "source": "/robots.txt",
       "destination": "https://raw.githubusercontent.com/webghaith-gif/ghaith-web-content-os/main/src/web/robots.txt"
     },
