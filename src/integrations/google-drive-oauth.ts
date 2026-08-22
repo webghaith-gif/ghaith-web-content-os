@@ -22,9 +22,6 @@ interface GoogleDriveOAuthStatus {
 }
 
 const SEARCH_CONSOLE_READONLY_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
-// Needed for Drive changes.list/files metadata across files the user can access,
-// regardless of which app created them. This does NOT grant content read access.
-const DRIVE_METADATA_READONLY_SCOPE = 'https://www.googleapis.com/auth/drive.metadata.readonly';
 
 export class GoogleDriveOAuthManager {
   private readonly store: Store;
@@ -76,7 +73,7 @@ export class GoogleDriveOAuthManager {
     });
 
     const scopes = [...new Set(
-      `${env.GOOGLE_DRIVE_SCOPES} ${DRIVE_METADATA_READONLY_SCOPE} ${SEARCH_CONSOLE_READONLY_SCOPE}`
+      `${env.GOOGLE_DRIVE_SCOPES} ${SEARCH_CONSOLE_READONLY_SCOPE}`
         .split(/\s+/)
         .map((scope) => scope.trim())
         .filter(Boolean),
