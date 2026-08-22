@@ -5,6 +5,8 @@ import { GptPackageIntakeService, type GptPackageIntakeInput } from './gpt-packa
 
 const GPT_PACKAGE_PREFIX = 'Ghaith Web GPT Package —';
 
+type GptDriveManifest = GptPackageIntakeInput & { reportId?: string };
+
 interface DriveManifestFile {
   id: string;
   name?: string;
@@ -22,8 +24,13 @@ interface DriveManifestFile {
  * Drive, parses the package, exports the referenced Canva designs, pairs every asset with its
  * platform copy, archives publishable binaries to Drive, and leaves the result IN_REVIEW.
  *
- * This keeps Canva as the editable visual library, Drive as the durable handoff/archive, and
- * Ghaith Web Content OS as the coordinator. No Gemini/OpenAI API call is made here.
+ * The manifest may provide opportunityId directly, or only reportId. In the latter case the
+ * package waits safely until report analysis has selected its strongest opportunity, then resumes.
+ * This lets the ChatGPT automation write the report and the package in the same run without
+ * waiting for the GitHub/Vercel pipeline to finish opportunity extraction first.
+ *
+ * Canva remains the editable visual library, Drive the durable handoff/archive, and
+ * Ghaith Web Content OS the coordinator. No Gemini/OpenAI API call is made here.
  */
 export class GptDriveIntakeService {
   private readonly oauth: GoogleDriveOAuthManager;
@@ -55,6 +62,8 @@ export class GptDriveIntakeService {
       try {
         const raw = await this.readText(file, accessToken);
         const parsed = parseManifest(raw);
+        await this.resolveOpportunity(parsed);
+
         const driveUrl = file.webViewLink ?? `https://drive.google.com/open?id=${encodeURIComponent(file.id)}`;
         const manifestAsset = {
           kind: 'document' as const,
@@ -90,6 +99,27 @@ export class GptDriveIntakeService {
     return { ok: failed.length === 0, scanned: candidates.length, imported, ignored, failed };
   }
 
+  private async resolveOpportunity(manifest: GptDriveManifest) {
+    if (typeof manifest.opportunityId === 'string' && manifest.opportunityId.trim()) return;
+    const reportId = typeof manifest.reportId === 'string' ? manifest.reportId.trim() : '';
+    if (!reportId) {
+      throw new Error('GPT package must contain opportunityId or reportId.');
+    }
+
+    const report = await this.store.getReport(reportId);
+    if (report.automation?.opportunityId) {
+      manifest.opportunityId = report.automation.opportunityId;
+      return;
+    }
+
+    const opportunities = (await this.store.listOpportunities()).filter((item) => item.reportId === reportId);
+    const selected = [...opportunities].sort((a, b) => b.score.total - a.score.total)[0];
+    if (!selected) {
+      throw new Error(`Report ${reportId} is waiting for opportunity extraction; GPT package will retry automatically.`);
+    }
+    manifest.opportunityId = selected.id;
+  }
+
   private async listCandidates(accessToken: string): Promise<DriveManifestFile[]> {
     const url = new URL('https://www.googleapis.com/drive/v3/files');
     url.searchParams.set('q', `name contains '${escapeDriveQuery(GPT_PACKAGE_PREFIX)}' and trashed = false`);
@@ -118,7 +148,7 @@ export class GptDriveIntakeService {
   }
 }
 
-function parseManifest(raw: string): GptPackageIntakeInput {
+function parseManifest(raw: string): GptDriveManifest {
   const cleaned = raw
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/i, '')
@@ -132,7 +162,7 @@ function parseManifest(raw: string): GptPackageIntakeInput {
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as GptPackageIntakeInput;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as GptDriveManifest;
     } catch {
       // Try the next normalized candidate.
     }
