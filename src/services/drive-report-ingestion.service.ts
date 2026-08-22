@@ -5,6 +5,7 @@ import { GptDriveIntakeService } from './gpt-drive-intake.service';
 import { NotificationService } from './notification.service';
 
 const INTAKE_NAME = 'Ghaith Web — Incoming Report';
+const GPT_PACKAGE_PREFIX = 'Ghaith Web GPT Package —';
 
 interface DriveFileMetadata {
   id: string;
@@ -84,6 +85,13 @@ export class DriveReportIngestionService {
 
       if (metadata.name === INTAKE_NAME) {
         ignored.push({ fileId: metadata.id, reason: 'intake_not_named_yet' });
+        continue;
+      }
+
+      // GPT package manifests are a handoff envelope for an existing report, never a new report.
+      // Excluding them here prevents the package document from recursively re-entering the report pipeline.
+      if (String(metadata.name ?? '').startsWith(GPT_PACKAGE_PREFIX)) {
+        ignored.push({ fileId: metadata.id, reason: 'gpt_package_manifest' });
         continue;
       }
 
