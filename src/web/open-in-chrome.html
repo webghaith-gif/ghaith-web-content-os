@@ -20,24 +20,24 @@
   <main>
     <div class="mark">GW</div>
     <h1>فتح Ghaith Web داخل Google Chrome</h1>
-    <p>هذه الصفحة مخصصة للهاتف. اضغط الزر أدناه لفتح النسخة الرسمية داخل تطبيق Chrome نفسه بدل وضع التطبيق المثبّت.</p>
-    <div class="note">بعد فتح Chrome: اضغط ⋮ ثم <b>إضافة إلى الشاشة الرئيسية</b> واختر <b>إنشاء اختصار</b> إذا ظهر الخيار.</div>
+    <p>تم فصل نسخة المتصفح عن نطاق التطبيق المثبّت. الزر يفتح مسار المتصفح <b>/browser/</b> خارج نطاق الـPWA الجديد.</p>
+    <div class="note">بعد فتح Chrome: اضغط ⋮ ثم <b>إضافة إلى الشاشة الرئيسية</b> واختر <b>إنشاء اختصار</b>. نسخة التطبيق المثبّتة الجديدة تعمل من <b>/app/</b>.</div>
     <div class="actions">
-      <a id="chromeBtn" class="btn primary" href="#">فتح في Google Chrome</a>
-      <a class="btn secondary" href="/?browser=1">فتح النسخة الرسمية هنا</a>
+      <a id="chromeBtn" class="btn primary" href="#">فتح نسخة Chrome</a>
+      <a class="btn secondary" href="/browser/">فتح نسخة المتصفح هنا</a>
     </div>
-    <div class="tiny" id="status">هذه ميزة مستقلة للهاتف ولا تغيّر التطبيق المثبّت.</div>
+    <div class="tiny" id="status">Browser: /browser/ · PWA: /app/</div>
   </main>
 <script>
 (() => {
-  const target='https://ghaith-web-content-os.vercel.app/?browser=1';
+  const target='https://ghaith-web-content-os.vercel.app/browser/';
   const encoded=encodeURIComponent(target);
-  const androidIntent=`intent://ghaith-web-content-os.vercel.app/?browser=1#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encoded};end`;
+  const androidIntent=`intent://ghaith-web-content-os.vercel.app/browser/#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encoded};end`;
   const btn=document.getElementById('chromeBtn');
   const status=document.getElementById('status');
   const isAndroid=/Android/i.test(navigator.userAgent);
   btn.href=isAndroid?androidIntent:target;
-  btn.addEventListener('click',()=>{status.textContent=isAndroid?'جاري فتح Google Chrome…':'جاري فتح النسخة الرسمية…';});
+  btn.addEventListener('click',()=>{status.textContent=isAndroid?'جاري فتح Google Chrome على المسار المنفصل…':'جاري فتح نسخة المتصفح…';});
 })();
 </script>
 </body>
