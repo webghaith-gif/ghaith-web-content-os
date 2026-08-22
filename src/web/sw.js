@@ -1,6 +1,8 @@
-const CACHE='ghaith-web-content-os-v16';
+const CACHE='ghaith-web-content-os-v17';
 const STATIC=['/','/styles.css?v=12','/app.js?v=12','/notifications.js?v=12','/manifest.webmanifest','/icon.svg'];
 const DEFAULT_ICON='/icon.svg';
+const HISTORY_DB='ghaith-web-notifications-v1';
+const HISTORY_STORE='events';
 
 self.addEventListener('install',event=>{
   event.waitUntil((async()=>{
@@ -26,6 +28,43 @@ self.addEventListener('fetch',event=>{
   }).catch(()=>caches.match(event.request)));
 });
 
+function openHistoryDb(){
+  return new Promise((resolve,reject)=>{
+    const request=indexedDB.open(HISTORY_DB,1);
+    request.onupgradeneeded=()=>{
+      const db=request.result;
+      if(!db.objectStoreNames.contains(HISTORY_STORE))db.createObjectStore(HISTORY_STORE,{keyPath:'id'});
+    };
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error);
+  });
+}
+
+async function savePushEvent(data){
+  try{
+    const db=await openHistoryDb();
+    const receivedAt=new Date().toISOString();
+    const item={
+      id:`${data.tag||'ghaith'}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+      tag:data.tag||'ghaith-web-content-os',
+      title:data.title||'غيث ويب',
+      body:data.body||'',
+      url:data.url||'/',
+      at:receivedAt,
+      receivedAt,
+    };
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(HISTORY_STORE,'readwrite');
+      tx.objectStore(HISTORY_STORE).put(item);
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>reject(tx.error);
+      tx.onabort=()=>reject(tx.error);
+    });
+    db.close();
+    return item;
+  }catch{return null}
+}
+
 function preferredTarget(rawUrl,windows){
   const origin=self.location.origin;
   let requested;
@@ -46,18 +85,20 @@ self.addEventListener('push',event=>{
   let data={title:'غيث ويب',body:'لديك تحديث جديد.',url:'/',tag:'ghaith-web-content-os',icon:DEFAULT_ICON,badge:DEFAULT_ICON};
   try{if(event.data)data={...data,...event.data.json()}}catch{if(event.data)data.body=event.data.text()}
   event.waitUntil((async()=>{
+    const stored=await savePushEvent(data);
+    const receivedAt=stored?.receivedAt||new Date().toISOString();
     await self.registration.showNotification(data.title,{
       body:data.body,
       icon:data.icon||DEFAULT_ICON,
       badge:data.badge||DEFAULT_ICON,
       tag:data.tag||'ghaith-web-content-os',
-      data:{url:data.url||'/',receivedAt:new Date().toISOString()},
+      data:{url:data.url||'/',receivedAt},
       renotify:true,
       requireInteraction:false,
     });
     try{
       const windows=await clients.matchAll({type:'window',includeUncontrolled:true});
-      await Promise.all(windows.map(client=>client.postMessage({type:'GHAITH_PUSH_RECEIVED',notification:data})));
+      await Promise.all(windows.map(client=>client.postMessage({type:'GHAITH_PUSH_RECEIVED',notification:{...data,receivedAt}})));
     }catch{}
   })());
 });
@@ -69,6 +110,10 @@ self.addEventListener('notificationclick',event=>{
     const target=preferredTarget(event.notification.data?.url||'/',windows);
     let targetUrl;
     try{targetUrl=new URL(target)}catch{return}
+
+    if(targetUrl.origin!==self.location.origin){
+      return clients.openWindow?clients.openWindow(targetUrl.href):undefined;
+    }
 
     for(const client of windows){
       try{
