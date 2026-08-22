@@ -11,4 +11,5 @@ test('internal Drive viewer extracts file IDs from Docs and Drive links', () => 
     extractDriveFileId('https://drive.google.com/open?id=1eHCZJfjcmSN3XCD5srR0LDa3CxSMVXyHYH4NhaRtq2s'),
     '1eHCZJfjcmSN3XCD5srR0LDa3CxSMVXyHYH4NhaRtq2s',
   );
+  assert.equal(extractDriveFileId('https://example.com/not-a-drive-file'), undefined);
 });
