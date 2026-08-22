@@ -1,7 +1,15 @@
 import { env } from '../config/env';
 import { fetchJson } from '../utils/http';
 
-interface ClickUpTaskResponse { id: string; url?: string; status?: { status?: string } | string; }
+interface ClickUpTaskResponse {
+  id: string;
+  name?: string;
+  description?: string;
+  text_content?: string;
+  url?: string;
+  status?: { status?: string } | string;
+  list?: { id?: string | number; name?: string };
+}
 interface ClickUpListResponse { id: string; name?: string; }
 interface ClickUpTeamsResponse { teams?: Array<{ id: string | number; name?: string }>; }
 interface ClickUpWebhookRecord {
