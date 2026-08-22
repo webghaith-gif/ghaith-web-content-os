@@ -1,0 +1,75 @@
+name: Export Stable V18 Backup
+
+on:
+  push:
+    branches: [backup-export-v18-2026-08-22]
+    paths:
+      - '.github/workflows/export-stable-backup.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact stable commit
+        uses: actions/checkout@v4
+        with:
+          ref: 6dde78c011018d41c6e01f31c54c9aab77d257ec
+          fetch-depth: 1
+
+      - name: Build phone backup package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p package/Ghaith-Web-Content-OS-V18-Stable-2026-08-22
+          rsync -a --exclude='.git' ./ package/Ghaith-Web-Content-OS-V18-Stable-2026-08-22/
+          cat > package/Ghaith-Web-Content-OS-V18-Stable-2026-08-22/RESTORE_INFO_AR.txt <<'EOF'
+          Ghaith Web Content OS — Stable V18 Backup
+          تاريخ التثبيت: 2026-08-22
+
+          هذه هي النسخة التي نجح فيها اختبار Google Drive Inbox → Reports → Automation → Opportunities → Content ووصلت إشعارات Push فعليًا.
+
+          GitHub repository:
+          https://github.com/webghaith-gif/ghaith-web-content-os
+
+          Stable branch:
+          stable-v18-report-pipeline-2026-08-22
+          https://github.com/webghaith-gif/ghaith-web-content-os/tree/stable-v18-report-pipeline-2026-08-22
+
+          Stable commit:
+          6dde78c011018d41c6e01f31c54c9aab77d257ec
+          https://github.com/webghaith-gif/ghaith-web-content-os/commit/6dde78c011018d41c6e01f31c54c9aab77d257ec
+
+          Production app:
+          https://ghaith-web-content-os.vercel.app
+
+          Matching Vercel deployment:
+          dpl_6bp4N3UNwY5p5Yhx89jsQQeAjn72
+          https://ghaith-web-content-kf60znp91-fethiasaadaoui25-2185s-projects.vercel.app
+
+          Google Drive intake document:
+          Ghaith Web — Incoming Report
+          File ID: 1eHCZJfjcmSN3XCD5srR0LDa3CxSMVXyHYH4NhaRtq2s
+          https://docs.google.com/document/d/1eHCZJfjcmSN3XCD5srR0LDa3CxSMVXyHYH4NhaRtq2s/edit
+
+          Runtime Exports folder:
+          Folder ID: 1fH5G5Mm8Vwi4v8jZQM3jTtJEGCnMa4sk
+          https://drive.google.com/drive/folders/1fH5G5Mm8Vwi4v8jZQM3jTtJEGCnMa4sk
+
+          ملاحظة أمنية:
+          مفاتيح API وOAuth tokens وقيم .env الحساسة ليست ضمن GitHub ولا ضمن هذه النسخة. تبقى في Vercel والخدمات المتصلة ويجب عدم مشاركتها داخل ملف النسخة الاحتياطية.
+          EOF
+          cd package
+          zip -qr Ghaith-Web-Content-OS-V18-Stable-2026-08-22.zip Ghaith-Web-Content-OS-V18-Stable-2026-08-22
+          sha256sum Ghaith-Web-Content-OS-V18-Stable-2026-08-22.zip > Ghaith-Web-Content-OS-V18-Stable-2026-08-22.sha256
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ghaith-Web-Content-OS-V18-Stable-2026-08-22
+          path: |
+            package/Ghaith-Web-Content-OS-V18-Stable-2026-08-22.zip
+            package/Ghaith-Web-Content-OS-V18-Stable-2026-08-22.sha256
+          retention-days: 90
