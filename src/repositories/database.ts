@@ -38,6 +38,15 @@ export interface GoogleDriveWatchState {
   webhookUrl: string;
 }
 
+export interface ClickUpWebhookState {
+  id: string;
+  secret: string;
+  endpoint: string;
+  workspaceId: string;
+  listId: string;
+  createdAt: string;
+}
+
 export interface PushSubscriptionState {
   endpoint: string;
   expirationTime?: number | null;
@@ -62,6 +71,9 @@ export interface IntegrationState {
     pending?: GoogleDriveOAuthPendingState;
     folderId?: string;
     watch?: GoogleDriveWatchState;
+  };
+  clickup?: {
+    webhook?: ClickUpWebhookState;
   };
   notifications?: PushNotificationState;
 }
