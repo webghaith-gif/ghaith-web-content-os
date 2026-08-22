@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { Readable } from 'node:stream';
 import { createApp } from './application';
+import { AppError } from './core/errors';
 import { env } from './config/env';
 import { Store } from './repositories/store';
 import { createDatabase } from './repositories/database-factory';
@@ -11,6 +12,7 @@ import { ReportPipelineService } from './services/report-pipeline.service';
 import { DriveReportIngestionService } from './services/drive-report-ingestion.service';
 import { DriveViewerService } from './services/drive-viewer.service';
 import { NotificationService } from './services/notification.service';
+import { GptPackageIntakeService } from './services/gpt-package-intake.service';
 import { safeStartupDiagnostic } from './utils/startup-diagnostic';
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
@@ -26,6 +28,28 @@ function header(req: IncomingMessage, name: string): string | undefined {
   if (typeof value === 'string' && value.trim()) return value.trim();
   if (Array.isArray(value) && typeof value[0] === 'string' && value[0].trim()) return value[0].trim();
   return undefined;
+}
+
+async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.from(chunk);
+    total += buffer.length;
+    if (total > 5_000_000) throw new AppError('GPT intake body is too large.', 413, 'PAYLOAD_TOO_LARGE');
+    chunks.push(buffer);
+  }
+  const raw = Buffer.concat(chunks).toString('utf8').trim();
+  if (!raw) throw new AppError('GPT intake JSON body is required.', 400, 'VALIDATION_ERROR');
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('body must be an object');
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    throw new AppError('Invalid GPT intake JSON.', 400, 'VALIDATION_ERROR');
+  }
 }
 
 async function sendDriveFile(res: ServerResponse, opened: Awaited<ReturnType<DriveViewerService['open']>>) {
@@ -54,6 +78,7 @@ try {
   const searchConsole = new SearchConsoleAdapter(store);
   const make = new MakeAdapter();
   const pipeline = new ReportPipelineService(store);
+  const gptIntake = new GptPackageIntakeService(store);
   const driveReports = new DriveReportIngestionService(store);
   const drive = new GoogleDriveAdapter(store);
   const driveViewer = new DriveViewerService(store);
@@ -171,6 +196,18 @@ try {
       }
 
       try {
+        if (method === 'POST' && url.pathname === '/api/automation/gpt-intake') {
+          const body = await readJsonBody(req);
+          const result = await gptIntake.ingest(body as any);
+          await notifications.send({
+            title: 'وصلت حزمة GPT إلى التطبيق ✅',
+            body: `${result.content.title} — تم ربط النصوص بالأصول حسب المنصة وحفظ النسخة التشغيلية في Drive.`,
+            url: '/browser.html?view=content',
+            tag: `gpt-intake-${result.content.id}-${result.content.revision}`,
+          }).catch((error) => console.warn('GPT intake notification failed', error));
+          return sendJson(res, 201, result);
+        }
+
         if (method === 'GET' && url.pathname === '/api/products') {
           const products = await store.listProducts();
           return sendJson(res, 200, products.map((product) => ({
@@ -230,9 +267,11 @@ try {
           return sendJson(res, 200, { ...result, driveImport });
         }
       } catch (error) {
-        console.error('Report/product automation route failed', error);
-        return sendJson(res, 500, {
-          error: 'AUTOMATION_ERROR',
+        console.error('Report/product/GPT intake automation route failed', error);
+        const status = error instanceof AppError ? error.statusCode : 500;
+        const code = error instanceof AppError ? error.code : 'AUTOMATION_ERROR';
+        return sendJson(res, status, {
+          error: code,
           message: error instanceof Error ? error.message : String(error),
         });
       }
