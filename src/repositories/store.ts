@@ -88,7 +88,10 @@ export class Store {
       return opportunity;
     });
   }
-  async listOpportunities() { return (await this.db.read()).opportunities.sort((a, b) => b.score.total - a.score.total); }
+  async listOpportunities() {
+    return [...(await this.db.read()).opportunities]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
   async getOpportunity(id: string) {
     const item = (await this.db.read()).opportunities.find((x) => x.id === id);
     if (!item) throw new NotFoundError('Opportunity');

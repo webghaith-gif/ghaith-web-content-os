@@ -27,6 +27,8 @@ export interface ReportAutomationState {
   assetsReadyAt?: string;
   productId?: string;
   productReadyForReviewAt?: string;
+  /** GPT explicitly decided this opportunity does not justify a product draft. */
+  productSkippedAt?: string;
   completedAt?: string;
   lastError?: string;
   lastErrorAt?: string;

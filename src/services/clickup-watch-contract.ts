@@ -37,7 +37,7 @@ export function buildClickUpWatchPlans(content: ContentItem): ClickUpWatchPlan[]
       );
     }
 
-    const asset = preferredPublishingAsset(content.assets, contract.mediaKind);
+    const asset = preferredPublishingAsset(content.assets, contract.mediaKind, platform);
     if (!asset) {
       throw new AppError(
         `${platform} requires one ${contract.mediaKind} attachment before READY.`,
@@ -63,23 +63,35 @@ export function buildClickUpWatchPlans(content: ContentItem): ClickUpWatchPlan[]
   });
 }
 
-function preferredPublishingAsset(assets: AssetRef[], mediaKind: 'image' | 'video'): AssetRef | undefined {
+function preferredPublishingAsset(assets: AssetRef[], mediaKind: 'image' | 'video', platform: string): AssetRef | undefined {
   const candidates = assets.filter((candidate) => candidate.kind === mediaKind && Boolean(candidate.url?.trim()));
+  const targetsPlatform = (candidate: AssetRef) => {
+    const targets = (candidate.platforms ?? []).map((value) => value.trim().toLowerCase()).filter(Boolean);
+    return targets.length > 0 && targets.includes(platform);
+  };
+  const isGlobal = (candidate: AssetRef) => (candidate.platforms ?? []).length === 0;
+
+  // Prefer the exact visual GPT/Canva assigned to this platform. Fall back to a global asset only
+  // for legacy packages that predate platform-level asset metadata.
+  const ordered = [
+    ...candidates.filter(targetsPlatform),
+    ...candidates.filter(isGlobal),
+  ];
 
   // Generated binaries are stored privately in Drive. providerId is the Drive file ID
   // for google-drive and remotion assets, so the publisher can download them with OAuth.
-  const driveBacked = candidates.find((candidate) =>
+  const driveBacked = ordered.find((candidate) =>
     Boolean(candidate.providerId)
     && (candidate.provider === 'google-drive' || candidate.provider === 'remotion'),
   );
   if (driveBacked) return driveBacked;
 
   // HeyGen and explicit external URLs are expected to be directly downloadable.
-  const direct = candidates.find((candidate) => candidate.provider === 'heygen' || candidate.provider === 'external');
+  const direct = ordered.find((candidate) => candidate.provider === 'heygen' || candidate.provider === 'external');
   if (direct) return direct;
 
   // Legacy assets without provider metadata may still be direct binary URLs.
-  return candidates.find((candidate) => !candidate.provider);
+  return ordered.find((candidate) => !candidate.provider);
 }
 
 function platformDescription(content: ContentItem, platform: string): string {
