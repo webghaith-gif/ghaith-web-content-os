@@ -21,7 +21,7 @@ export class ReportAutomationService {
     const reportProducts = products.filter((item) => item.reportId === report.id && item.status !== 'ARCHIVED');
     const content = pickContent(reportContents, report.automation?.contentId);
     const product = pickProduct(reportProducts, report.automation?.productId);
-    const assetsReady = Boolean(content && ((content.assets?.length ?? 0) > 0 || (content.googleDriveUrls?.length ?? 0) > 0));
+    const assetsReady = Boolean(content && hasReviewableMedia(content));
     const complete = Boolean(report.googleDriveUrl && reportOpportunities.length && content && assetsReady && product?.googleDriveUrl);
     return {
       report,
@@ -59,11 +59,32 @@ export class ReportAutomationService {
 
   async markContentReady(reportId: string, content: ContentItem) {
     const report = await this.store.getReport(reportId);
-    const assetsReady = (content.assets?.length ?? 0) > 0 || (content.googleDriveUrls?.length ?? 0) > 0;
+    const assetsReady = hasReviewableMedia(content);
+    const contentWasNew = !report.automation?.contentReadyAt;
+    const assetsWereNew = assetsReady && !report.automation?.assetsReadyAt;
     const patch: Record<string, string> = { contentId: content.id };
-    if (!report.automation?.contentReadyAt) patch.contentReadyAt = new Date().toISOString();
-    if (assetsReady && !report.automation?.assetsReadyAt) patch.assetsReadyAt = new Date().toISOString();
-    return this.store.patchReportAutomation(reportId, patch);
+    if (contentWasNew) patch.contentReadyAt = new Date().toISOString();
+    if (assetsWereNew) patch.assetsReadyAt = new Date().toISOString();
+    const updated = await this.store.patchReportAutomation(reportId, patch);
+
+    if (contentWasNew) {
+      await this.safeNotify({
+        title: 'تم إنشاء المحتوى التعليمي للمراجعة ✍️',
+        body: `${content.title} — المحتوى في IN REVIEW ولن ينتقل إلى READY أو النشر دون قرارك.`,
+        url: '/browser.html?view=content',
+        tag: `pipeline-content-${report.id}-${content.id}`,
+      });
+    }
+    if (assetsWereNew) {
+      const mediaCount = content.assets.filter((asset) => ['image', 'carousel', 'video'].includes(asset.kind)).length;
+      await this.safeNotify({
+        title: 'اكتملت أصول المحتوى 🎨',
+        body: `${content.title} — ${mediaCount} أصل بصري/فيديو جاهز للمراجعة ومحفوظ ضمن المسار.`,
+        url: '/browser.html?view=content',
+        tag: `pipeline-assets-${report.id}-${content.id}`,
+      });
+    }
+    return updated;
   }
 
   async complete(reportId: string) {
@@ -115,6 +136,10 @@ export class ReportAutomationService {
     try { await this.notifications.send(notification); }
     catch (error) { console.warn('Report automation notification failed', error); }
   }
+}
+
+function hasReviewableMedia(content: ContentItem): boolean {
+  return content.assets.some((asset) => ['image', 'carousel', 'video'].includes(asset.kind));
 }
 
 function pickContent(items: ContentItem[], preferred?: string) {
