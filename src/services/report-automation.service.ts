@@ -51,7 +51,7 @@ export class ReportAutomationService {
     await this.safeNotify({
       title: 'تم تحليل التقرير واستخراج الفرص ✦',
       body: `${report.title} — تم اختيار أقوى فرصة آليًا: ${selected.title}`,
-      url: '/browser.html?view=opportunities',
+      url: report.googleDriveUrl ?? `/browser.html?view=opportunities&opportunity=${encodeURIComponent(selected.id)}`,
       tag: `report-opportunities-${report.id}`,
     });
     return updated;
@@ -71,7 +71,7 @@ export class ReportAutomationService {
       await this.safeNotify({
         title: 'تم إنشاء المحتوى التعليمي للمراجعة ✍️',
         body: `${content.title} — المحتوى في IN REVIEW ولن ينتقل إلى READY أو النشر دون قرارك.`,
-        url: '/browser.html?view=content',
+        url: contentReviewUrl(content),
         tag: `pipeline-content-${report.id}-${content.id}`,
       });
     }
@@ -80,7 +80,7 @@ export class ReportAutomationService {
       await this.safeNotify({
         title: 'اكتملت أصول المحتوى 🎨',
         body: `${content.title} — ${mediaCount} أصل بصري/فيديو جاهز للمراجعة ومحفوظ ضمن المسار.`,
-        url: '/browser.html?view=content',
+        url: mediaReviewUrl(content),
         tag: `pipeline-assets-${report.id}-${content.id}`,
       });
     }
@@ -108,10 +108,11 @@ export class ReportAutomationService {
       lastError: undefined,
       lastErrorAt: undefined,
     });
+    const product = current.productId ? await this.store.getProduct(current.productId).catch(() => undefined) : undefined;
     await this.safeNotify({
       title: 'اكتملت معالجة التقرير آليًا ✅',
       body: `${report.title} — التقرير محفوظ، الفرص مستخرجة، المحتوى والأصول جاهزة للمراجعة، والمنتج الأولي محفوظ. الآن القرار التالي لك.`,
-      url: '/browser.html?view=reports',
+      url: product?.googleDriveUrl ?? report.googleDriveUrl ?? '/browser.html?view=reports',
       tag: `report-automation-complete-${report.id}`,
     });
     return { ok: true, completed: true, alreadyCompleted: false, status: await this.status(reportId) };
@@ -127,7 +128,7 @@ export class ReportAutomationService {
     await this.safeNotify({
       title: 'توقفت خطوة آلية مؤقتًا ⚠️',
       body: `${report.title} — ${safe || 'سيعيد النظام المحاولة تلقائيًا.'}`,
-      url: '/browser.html?view=reports',
+      url: report.googleDriveUrl ?? '/browser.html?view=reports',
       tag: `report-automation-error-${report.id}`,
     });
   }
@@ -140,6 +141,22 @@ export class ReportAutomationService {
 
 function hasReviewableMedia(content: ContentItem): boolean {
   return content.assets.some((asset) => ['image', 'carousel', 'video'].includes(asset.kind));
+}
+
+function contentReviewUrl(content: ContentItem): string {
+  const driveDocument = content.assets.find((asset) => asset.provider === 'google-drive' && asset.kind === 'document');
+  return driveDocument?.url
+    ?? content.googleDriveUrls?.[0]
+    ?? `/browser.html?view=content&content=${encodeURIComponent(content.id)}`;
+}
+
+function mediaReviewUrl(content: ContentItem): string {
+  const driveMedia = content.assets.find((asset) => asset.provider === 'google-drive' && ['image', 'carousel', 'video'].includes(asset.kind));
+  const anyMedia = content.assets.find((asset) => ['image', 'carousel', 'video'].includes(asset.kind));
+  return driveMedia?.url
+    ?? anyMedia?.url
+    ?? content.googleDriveUrls?.[0]
+    ?? `/browser.html?view=content&content=${encodeURIComponent(content.id)}`;
 }
 
 function pickContent(items: ContentItem[], preferred?: string) {
