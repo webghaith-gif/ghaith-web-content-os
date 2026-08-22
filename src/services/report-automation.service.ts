@@ -1,12 +1,15 @@
 import type { ContentItem, Opportunity, ProductDraft } from '../core/types';
 import { Store } from '../repositories/store';
+import { DriveViewerService } from './drive-viewer.service';
 import { NotificationService } from './notification.service';
 
 export class ReportAutomationService {
   private readonly notifications: NotificationService;
+  private readonly driveViewer: DriveViewerService;
 
   constructor(private readonly store: Store) {
     this.notifications = new NotificationService(store);
+    this.driveViewer = new DriveViewerService(store);
   }
 
   async status(reportId: string) {
@@ -51,7 +54,8 @@ export class ReportAutomationService {
     await this.safeNotify({
       title: 'تم تحليل التقرير واستخراج الفرص ✦',
       body: `${report.title} — تم اختيار أقوى فرصة آليًا: ${selected.title}`,
-      url: report.googleDriveUrl ?? `/browser.html?view=opportunities&opportunity=${encodeURIComponent(selected.id)}`,
+      url: this.driveViewer.linkForDriveUrl(report.googleDriveUrl)
+        ?? `/browser.html?view=opportunities&opportunity=${encodeURIComponent(selected.id)}`,
       tag: `report-opportunities-${report.id}`,
     });
     return updated;
@@ -68,19 +72,21 @@ export class ReportAutomationService {
     const updated = await this.store.patchReportAutomation(reportId, patch);
 
     if (contentWasNew) {
+      const reviewUrl = contentReviewUrl(content);
       await this.safeNotify({
         title: 'تم إنشاء المحتوى التعليمي للمراجعة ✍️',
         body: `${content.title} — المحتوى في IN REVIEW ولن ينتقل إلى READY أو النشر دون قرارك.`,
-        url: contentReviewUrl(content),
+        url: this.driveViewer.linkForDriveUrl(reviewUrl) ?? reviewUrl,
         tag: `pipeline-content-${report.id}-${content.id}`,
       });
     }
     if (assetsWereNew) {
       const mediaCount = content.assets.filter((asset) => ['image', 'carousel', 'video'].includes(asset.kind)).length;
+      const reviewUrl = mediaReviewUrl(content);
       await this.safeNotify({
         title: 'اكتملت أصول المحتوى 🎨',
         body: `${content.title} — ${mediaCount} أصل بصري/فيديو جاهز للمراجعة ومحفوظ ضمن المسار.`,
-        url: mediaReviewUrl(content),
+        url: this.driveViewer.linkForDriveUrl(reviewUrl) ?? reviewUrl,
         tag: `pipeline-assets-${report.id}-${content.id}`,
       });
     }
@@ -112,7 +118,9 @@ export class ReportAutomationService {
     await this.safeNotify({
       title: 'اكتملت معالجة التقرير آليًا ✅',
       body: `${report.title} — التقرير محفوظ، الفرص مستخرجة، المحتوى والأصول جاهزة للمراجعة، والمنتج الأولي محفوظ. الآن القرار التالي لك.`,
-      url: product?.googleDriveUrl ?? report.googleDriveUrl ?? '/browser.html?view=reports',
+      url: this.driveViewer.linkForDriveUrl(product?.googleDriveUrl)
+        ?? this.driveViewer.linkForDriveUrl(report.googleDriveUrl)
+        ?? '/browser.html?view=reports',
       tag: `report-automation-complete-${report.id}`,
     });
     return { ok: true, completed: true, alreadyCompleted: false, status: await this.status(reportId) };
@@ -128,7 +136,7 @@ export class ReportAutomationService {
     await this.safeNotify({
       title: 'توقفت خطوة آلية مؤقتًا ⚠️',
       body: `${report.title} — ${safe || 'سيعيد النظام المحاولة تلقائيًا.'}`,
-      url: report.googleDriveUrl ?? '/browser.html?view=reports',
+      url: this.driveViewer.linkForDriveUrl(report.googleDriveUrl) ?? '/browser.html?view=reports',
       tag: `report-automation-error-${report.id}`,
     });
   }
