@@ -20,24 +20,24 @@
   <main>
     <div class="mark">GW</div>
     <h1>فتح Ghaith Web داخل Google Chrome</h1>
-    <p>تم فصل نسخة المتصفح عن نطاق التطبيق المثبّت. نسخة Chrome لها صفحة مستقلة خارج Scope التطبيق.</p>
-    <div class="note">بعد فتح Chrome: اضغط ⋮ ثم <b>إضافة إلى الشاشة الرئيسية</b> واختر <b>إنشاء اختصار</b>. التطبيق المثبّت الجديد يبدأ من <b>/app/index.html</b>.</div>
+    <p>تم فصل نسخة المتصفح عن التطبيق المثبّت فعليًا. نسخة Chrome لها ملف مستقل لا يقع داخل Scope التطبيق.</p>
+    <div class="note">بعد فتح Chrome: اضغط ⋮ ثم <b>إضافة إلى الشاشة الرئيسية</b> واختر <b>إنشاء اختصار</b>. التطبيق المثبّت الجديد يبدأ من <b>/app-standalone.html</b>.</div>
     <div class="actions">
       <a id="chromeBtn" class="btn primary" href="#">فتح نسخة Chrome</a>
-      <a class="btn secondary" href="/browser/index.html">فتح نسخة المتصفح هنا</a>
+      <a class="btn secondary" href="/browser.html">فتح نسخة المتصفح هنا</a>
     </div>
-    <div class="tiny" id="status">Browser: /browser/index.html · PWA: /app/index.html</div>
+    <div class="tiny" id="status">Browser: /browser.html · PWA: /app-standalone.html</div>
   </main>
 <script>
 (() => {
-  const target='https://ghaith-web-content-os.vercel.app/browser/index.html';
+  const target='https://ghaith-web-content-os.vercel.app/browser.html';
   const encoded=encodeURIComponent(target);
-  const androidIntent=`intent://ghaith-web-content-os.vercel.app/browser/index.html#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encoded};end`;
+  const androidIntent=`intent://ghaith-web-content-os.vercel.app/browser.html#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encoded};end`;
   const btn=document.getElementById('chromeBtn');
   const status=document.getElementById('status');
   const isAndroid=/Android/i.test(navigator.userAgent);
   btn.href=isAndroid?androidIntent:target;
-  btn.addEventListener('click',()=>{status.textContent=isAndroid?'جاري فتح Google Chrome على المسار المنفصل…':'جاري فتح نسخة المتصفح…';});
+  btn.addEventListener('click',()=>{status.textContent=isAndroid?'جاري فتح Google Chrome على النسخة المنفصلة…':'جاري فتح نسخة المتصفح…';});
 })();
 </script>
 </body>
