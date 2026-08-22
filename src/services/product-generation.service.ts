@@ -1,12 +1,14 @@
 import type { ProductDraft } from '../core/types';
 import { OpenAIAdapter } from '../integrations/openai.adapter';
 import { Store } from '../repositories/store';
+import { DriveViewerService } from './drive-viewer.service';
 import { NotificationService } from './notification.service';
 import { ProductArchiveService } from './product-archive.service';
 
 export class ProductGenerationService {
   private readonly archive: ProductArchiveService;
   private readonly notifications: NotificationService;
+  private readonly driveViewer: DriveViewerService;
 
   constructor(
     private readonly store: Store,
@@ -14,6 +16,7 @@ export class ProductGenerationService {
   ) {
     this.archive = new ProductArchiveService(store);
     this.notifications = new NotificationService(store);
+    this.driveViewer = new DriveViewerService(store);
   }
 
   async createFromOpportunity(opportunityId: string, oidcToken?: string): Promise<ProductDraft> {
@@ -67,7 +70,7 @@ export class ProductGenerationService {
         await this.notifications.send({
           title: 'منتج أولي جاهز للمراجعة 📦',
           body: `${product.title} — تم حفظ المسودة والهيكل في Google Drive. القرار التالي لك.`,
-          url: '/browser.html?product=1',
+          url: this.driveViewer.linkForDriveUrl(product.googleDriveUrl) ?? '/browser.html?product=1',
           tag: `product-review-${product.id}`,
         });
       } catch (error) {
