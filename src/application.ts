@@ -9,6 +9,7 @@ import { IntelligenceService } from './services/intelligence.service';
 import { ContentGenerationService } from './services/content-generation.service';
 import { ApprovalService } from './services/approval.service';
 import { PublishingOrchestrator } from './services/publishing-orchestrator';
+import { ClickUpNotificationWatchService } from './services/clickup-notification-watch.service';
 import { MetricsService } from './services/metrics.service';
 import { AssetService } from './services/asset.service';
 import { NotificationService, type AppNotification } from './services/notification.service';
@@ -30,6 +31,7 @@ export function createApp() {
   const generation = new ContentGenerationService(store);
   const approval = new ApprovalService(store);
   const publishing = new PublishingOrchestrator(store, approval);
+  const clickupWatch = new ClickUpNotificationWatchService(store, publishing);
   const metrics = new MetricsService(store);
   const assets = new AssetService(store);
   const notifications = new NotificationService(store);
@@ -121,24 +123,32 @@ export function createApp() {
       if (url.pathname === '/api/notifications/subscribe' && method === 'POST') {
         const subscription = await notifications.subscribe(await readJson(req));
         let driveWatch: unknown = null;
+        let clickupStatusWatch: unknown = null;
         try {
           driveWatch = await integrations.googleDrive.ensureChangesWatch(`${requestOrigin(req)}/api/webhooks/google-drive`);
         } catch (error) {
           console.warn('Drive watch activation after push subscription failed', error);
         }
+        try {
+          if (integrations.clickup.enabled) {
+            clickupStatusWatch = await clickupWatch.ensure(`${requestOrigin(req)}/api/webhooks/clickup`);
+          }
+        } catch (error) {
+          console.warn('ClickUp status watch activation after push subscription failed', error);
+        }
         const delivery = await safeNotify({
           title: 'تم تفعيل إشعارات غيث ويب ✅',
-          body: 'ستصلك إشعارات عند جاهزية المحتوى وعند وصول ملفات محتوى جديدة إلى Google Drive.',
-          url: '/',
+          body: 'ستصلك إشعارات عند جاهزية المحتوى، وصول الملفات، ونتائج مسار النشر.',
+          url: '/browser.html',
           tag: 'notifications-enabled',
         });
-        return sendJson(res, 201, { ok: true, endpoint: subscription.endpoint, delivery, driveWatch });
+        return sendJson(res, 201, { ok: true, endpoint: subscription.endpoint, delivery, driveWatch, clickupStatusWatch });
       }
       if (url.pathname === '/api/notifications/test' && method === 'POST') {
         return sendJson(res, 200, await notifications.send({
           title: 'اختبار إشعارات غيث ويب 🔔',
           body: 'الإشعارات تعمل بنجاح على هذا الجهاز.',
-          url: '/',
+          url: '/browser.html',
           tag: 'notification-test',
         }));
       }
@@ -146,6 +156,17 @@ export function createApp() {
       if (url.pathname === '/api/integrations/clickup/test' && method === 'GET') {
         const probe = await integrations.clickup.testConnection();
         return sendJson(res, probe.ok ? 200 : 503, probe);
+      }
+      if (url.pathname === '/api/integrations/clickup/watch/status' && method === 'GET') {
+        return sendJson(res, 200, await clickupWatch.status());
+      }
+      if (url.pathname === '/api/integrations/clickup/watch/ensure' && method === 'POST') {
+        return sendJson(res, 200, await clickupWatch.ensure(`${requestOrigin(req)}/api/webhooks/clickup`));
+      }
+      if (url.pathname === '/api/webhooks/clickup' && method === 'POST') {
+        const raw = await readRawBody(req);
+        const result = await clickupWatch.consume(raw, requestHeader(req, 'x-signature'));
+        return sendJson(res, 200, result);
       }
       if (url.pathname === '/api/integrations/openai/test' && method === 'GET') {
         const probe = await integrations.openai.testConnection(oidcToken);
@@ -205,7 +226,7 @@ export function createApp() {
           await safeNotify({
             title: 'ملف محتوى جديد في Google Drive 📁',
             body: file.name,
-            url: file.webViewLink ?? '/',
+            url: file.webViewLink ?? '/browser.html',
             tag: `drive-file-${file.id}`,
           });
         }
@@ -213,7 +234,7 @@ export function createApp() {
           await safeNotify({
             title: 'ملفات محتوى جديدة في Google Drive 📁',
             body: `تمت إضافة ${changedFiles.length} ملفات جديدة إلى مجلدات غيث ويب.`,
-            url: '/',
+            url: '/browser.html',
             tag: 'drive-files-summary',
           });
         }
@@ -268,7 +289,7 @@ export function createApp() {
         await safeNotify({
           title: 'فيديو HeyGen النهائي جاهز على Google Drive 🎬',
           body: content.title,
-          url: '/?view=content',
+          url: '/browser.html?view=content',
           tag: `heygen-video-${content.id}`,
         });
         return sendJson(res, 200, { ok: true, content });
@@ -287,7 +308,7 @@ export function createApp() {
         await safeNotify({
           title: 'تقرير جديد وصل إلى Ghaith Web Content OS 📥',
           body: report.title,
-          url: '/?view=reports',
+          url: '/browser.html?view=reports',
           tag: `report-${report.id}`,
         });
         return sendJson(res, 201, report);
@@ -327,7 +348,7 @@ export function createApp() {
         await safeNotify({
           title: 'محتوى جديد جاهز للمراجعة ✨',
           body: content.title,
-          url: '/?view=content',
+          url: '/browser.html?view=content',
           tag: `content-review-${content.id}`,
         });
         return sendJson(res, 201, content);
@@ -356,7 +377,7 @@ export function createApp() {
           await safeNotify({
             title: 'المحتوى READY وجاهز للنشر ✅',
             body: content.title,
-            url: '/?view=content',
+            url: '/browser.html?view=content',
             tag: `content-ready-${content.id}`,
           });
           return sendJson(res, 200, content);
@@ -369,7 +390,7 @@ export function createApp() {
             await safeNotify({
               title: 'أصول المحتوى جاهزة على Google Drive 🎨',
               body: `${content.title} — تمت إضافة ${added} ملفات/روابط جديدة.`,
-              url: '/?view=content',
+              url: '/browser.html?view=content',
               tag: `content-assets-${content.id}`,
             });
           }
@@ -383,7 +404,7 @@ export function createApp() {
               body: result.complete
                 ? `${result.content.title} — تم إنشاء ${result.repairedFiles.length} أصول فعلية بخط عربي مضمّن.`
                 : `${result.content.title} — الأصول الناقصة: ${result.missingKinds.join(', ')}.`,
-              url: '/?view=content',
+              url: '/browser.html?view=content',
               tag: `content-assets-repaired-${result.content.id}`,
             });
           }
@@ -442,7 +463,7 @@ async function sendStatic(res: ServerResponse, pathname: string) {
   res.end(content);
 }
 
-async function readJson(req: IncomingMessage, allowEmpty = false): Promise<Record<string, any>> {
+async function readRawBody(req: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let total = 0;
   for await (const chunk of req) {
@@ -450,7 +471,11 @@ async function readJson(req: IncomingMessage, allowEmpty = false): Promise<Recor
     if (total > 2_000_000) throw new AppError('Request body too large.', 413, 'PAYLOAD_TOO_LARGE');
     chunks.push(buf);
   }
-  const raw = Buffer.concat(chunks).toString('utf8').trim();
+  return Buffer.concat(chunks);
+}
+
+async function readJson(req: IncomingMessage, allowEmpty = false): Promise<Record<string, any>> {
+  const raw = (await readRawBody(req)).toString('utf8').trim();
   if (!raw && allowEmpty) return {};
   if (!raw) throw new AppError('JSON body required.', 400, 'VALIDATION_ERROR');
   try { return JSON.parse(raw); } catch { throw new AppError('Invalid JSON.', 400, 'VALIDATION_ERROR'); }
