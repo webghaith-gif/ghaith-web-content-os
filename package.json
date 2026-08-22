@@ -8,11 +8,11 @@
   },
   "scripts": {
     "dev": "node --env-file=.env -r ts-node/register/transpile-only src/server.ts",
-    "build": "tsc -p tsconfig.json && node --check src/web/app.js && node --check src/web/notifications.js && node --check src/web/notification-center.js && node --check src/web/push-sw.js && node scripts/copy-static.mjs && node scripts/bundle-remotion.mjs",
+    "build": "tsc -p tsconfig.json && node --check src/web/app.js && node --check src/web/notifications.js && node --check src/web/notification-center.js && node --check src/web/notification-ui-sync.js && node --check src/web/push-sw.js && node scripts/copy-static.mjs && node scripts/bundle-remotion.mjs",
     "render:sample": "remotion render src/remotion/index.tsx GhaithVertical tmp/ghaith-remotion-sample.mp4 --codec=h264",
     "start": "node --env-file=.env dist/src/server.js",
     "test": "npm run build && node --test dist/tests/*.test.js",
-    "check": "tsc -p tsconfig.json --noEmit && node --check src/web/app.js && node --check src/web/notifications.js && node --check src/web/notification-center.js && node --check src/web/push-sw.js",
+    "check": "tsc -p tsconfig.json --noEmit && node --check src/web/app.js && node --check src/web/notifications.js && node --check src/web/notification-center.js && node --check src/web/notification-ui-sync.js && node --check src/web/push-sw.js",
     "migrate:postgres": "npm run build && node --env-file=.env dist/src/scripts/migrate-json-to-postgres.js"
   },
   "devDependencies": {
