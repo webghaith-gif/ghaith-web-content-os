@@ -1,4 +1,4 @@
-import type { ContentItem, Opportunity, PublicationLog, Report } from '../core/types';
+import type { ContentItem, Opportunity, ProductDraft, PublicationLog, Report } from '../core/types';
 
 export interface CanvaOAuthTokenState {
   accessToken: string;
@@ -83,6 +83,7 @@ export interface DatabaseShape {
   reports: Report[];
   opportunities: Opportunity[];
   contents: ContentItem[];
+  products: ProductDraft[];
   logs: PublicationLog[];
   integrations: IntegrationState;
 }
@@ -93,13 +94,14 @@ export interface DatabaseBackend {
   mutate<T>(fn: (db: DatabaseShape) => T | Promise<T>): Promise<T>;
 }
 
-export const emptyDb = (): DatabaseShape => ({ reports: [], opportunities: [], contents: [], logs: [], integrations: {} });
+export const emptyDb = (): DatabaseShape => ({ reports: [], opportunities: [], contents: [], products: [], logs: [], integrations: {} });
 
 export function normalizeDb(value: Partial<DatabaseShape> | undefined | null): DatabaseShape {
   return {
     reports: Array.isArray(value?.reports) ? value.reports : [],
     opportunities: Array.isArray(value?.opportunities) ? value.opportunities : [],
     contents: Array.isArray(value?.contents) ? value.contents : [],
+    products: Array.isArray(value?.products) ? value.products : [],
     logs: Array.isArray(value?.logs) ? value.logs : [],
     integrations: value?.integrations && typeof value.integrations === 'object' ? value.integrations : {},
   };
