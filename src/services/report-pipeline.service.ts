@@ -90,7 +90,7 @@ export class ReportPipelineService {
       status = await this.automation.status(report.id);
       if (!status.complete) throw new AppError('Pipeline prerequisites are incomplete.', 409, 'PIPELINE_INCOMPLETE');
       const completed = await this.automation.complete(report.id);
-      return { ok: true, idle: false, reportId: report.id, stage: 'PIPELINE_COMPLETE', ...completed };
+      return { ...completed, idle: false, reportId: report.id, stage: 'PIPELINE_COMPLETE' };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await this.automation.recordError(report.id, message).catch(() => undefined);
