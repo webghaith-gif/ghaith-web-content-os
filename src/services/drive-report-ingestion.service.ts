@@ -1,6 +1,7 @@
 import { GoogleDriveAdapter } from '../integrations/google-drive.adapter';
 import { GoogleDriveOAuthManager } from '../integrations/google-drive-oauth';
 import { Store } from '../repositories/store';
+import { GptDriveIntakeService } from './gpt-drive-intake.service';
 import { NotificationService } from './notification.service';
 
 const INTAKE_NAME = 'Ghaith Web — Incoming Report';
@@ -17,11 +18,13 @@ interface DriveFileMetadata {
 export class DriveReportIngestionService {
   private readonly drive: GoogleDriveAdapter;
   private readonly oauth: GoogleDriveOAuthManager;
+  private readonly gptPackages: GptDriveIntakeService;
   private readonly notifications: NotificationService;
 
   constructor(private readonly store: Store) {
     this.drive = new GoogleDriveAdapter(store);
     this.oauth = new GoogleDriveOAuthManager(store);
+    this.gptPackages = new GptDriveIntakeService(store);
     this.notifications = new NotificationService(store);
   }
 
@@ -116,7 +119,15 @@ export class DriveReportIngestionService {
       });
     }
 
-    return { ok: true, scanned: candidates.length, imported, ignored };
+    let gptPackages: unknown;
+    try {
+      gptPackages = await this.gptPackages.importPendingPackages();
+    } catch (error) {
+      gptPackages = { ok: false, message: error instanceof Error ? error.message : String(error) };
+      console.warn('GPT package Drive intake deferred', error);
+    }
+
+    return { ok: true, scanned: candidates.length, imported, ignored, gptPackages };
   }
 
   private async listRootReportFiles(rootFolderId: string, accessToken: string): Promise<DriveFileMetadata[]> {
