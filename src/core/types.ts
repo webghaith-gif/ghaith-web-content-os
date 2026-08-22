@@ -7,8 +7,30 @@ export const CONTENT_STATUSES = [
   'ARCHIVED',
 ] as const;
 
+export const PRODUCT_STATUSES = [
+  'IN_REVIEW',
+  'APPROVED',
+  'PRODUCT_READY',
+  'ARCHIVED',
+] as const;
+
 export type ContentStatus = (typeof CONTENT_STATUSES)[number];
+export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
 export type PublishResult = 'SUCCESS' | 'WARNING' | 'ERROR';
+
+export interface ReportAutomationState {
+  version: number;
+  opportunityId?: string;
+  opportunitiesReadyAt?: string;
+  contentId?: string;
+  contentReadyAt?: string;
+  assetsReadyAt?: string;
+  productId?: string;
+  productReadyForReviewAt?: string;
+  completedAt?: string;
+  lastError?: string;
+  lastErrorAt?: string;
+}
 
 export interface Report {
   id: string;
@@ -18,6 +40,7 @@ export interface Report {
   createdAt: string;
   googleDriveUrl?: string;
   googleDriveFolderUrl?: string;
+  automation?: ReportAutomationState;
 }
 
 export interface OpportunityScore {
@@ -51,6 +74,38 @@ export interface Opportunity {
     fetchedAt: string;
   };
   createdAt: string;
+}
+
+export interface ProductQualityReview {
+  score?: number;
+  strengths?: string[];
+  risks?: string[];
+  sourceFaithful?: boolean;
+  usefulWithoutHype?: boolean;
+  readyForHumanReview?: boolean;
+}
+
+export interface ProductDraft {
+  id: string;
+  reportId: string;
+  opportunityId: string;
+  title: string;
+  productType: string;
+  targetAudience: string;
+  problem: string;
+  promise: string;
+  deliverables: string[];
+  outline: string[];
+  draftBody: string;
+  coverPrompt?: string;
+  qualityReview?: ProductQualityReview;
+  status: ProductStatus;
+  googleDriveUrl?: string;
+  googleDriveFolderUrl?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CarouselSlideContent {
