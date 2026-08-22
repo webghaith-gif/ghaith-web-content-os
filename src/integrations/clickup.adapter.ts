@@ -90,9 +90,8 @@ export class ClickUpAdapter {
         list_id: Number(env.CLICKUP_LIST_ID),
       }),
     });
-    const value = response.webhook ?? response;
-    const id = value.id ?? response.id;
-    const secret = value.secret ?? response.webhook?.secret;
+    const id = response.webhook?.id ?? response.id;
+    const secret = response.webhook?.secret;
     if (!id || !secret) throw new Error('ClickUp created a webhook without returning an id/secret.');
     return { id: String(id), secret, endpoint, workspaceId };
   }
