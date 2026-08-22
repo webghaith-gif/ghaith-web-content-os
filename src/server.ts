@@ -6,6 +6,7 @@ import { createDatabase } from './repositories/database-factory';
 import { SearchConsoleAdapter } from './integrations/search-console.adapter';
 import { MakeAdapter } from './integrations/make.adapter';
 import { ReportPipelineService } from './services/report-pipeline.service';
+import { DriveReportIngestionService } from './services/drive-report-ingestion.service';
 import { safeStartupDiagnostic } from './utils/startup-diagnostic';
 
 // Lightweight extension routes intentionally wrap the stable application instead of
@@ -33,6 +34,7 @@ try {
   const searchConsole = new SearchConsoleAdapter(store);
   const make = new MakeAdapter();
   const pipeline = new ReportPipelineService(store);
+  const driveReports = new DriveReportIngestionService(store);
 
   if (baseHandler) {
     app.removeAllListeners('request');
@@ -115,8 +117,20 @@ try {
           return sendJson(res, 200, await pipeline.status(match[1]!));
         }
 
+        if (method === 'POST' && url.pathname === '/api/automation/import-drive-reports') {
+          return sendJson(res, 200, await driveReports.importPendingChanges());
+        }
+
         if (method === 'POST' && url.pathname === '/api/automation/process-next-stage') {
-          return sendJson(res, 200, await pipeline.processNextStage(oidcToken));
+          let driveImport: unknown;
+          try {
+            driveImport = await driveReports.importPendingChanges();
+          } catch (error) {
+            driveImport = { ok: false, message: error instanceof Error ? error.message : String(error) };
+            console.warn('Drive report import deferred', error);
+          }
+          const result = await pipeline.processNextStage(oidcToken);
+          return sendJson(res, 200, { ...result, driveImport });
         }
       } catch (error) {
         console.error('Report/product automation route failed', error);

@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/new-report-autoprocess.yml'
+      - 'src/server.ts'
+      - 'src/services/drive-report-ingestion.service.ts'
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
@@ -27,17 +29,20 @@ jobs:
           set -u
           base='https://ghaith-web-content-os.vercel.app'
 
-          # Each call advances exactly one durable stage. Repeating the call is safe:
-          # completed stages are detected from persisted app/Drive state and skipped.
-          # The run stops after one report reaches PIPELINE_COMPLETE so a large backlog
-          # cannot consume the free AI quota in one execution.
+          # A push may arrive before Vercel has promoted the new production build.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            sleep 55
+          fi
+
+          # Each call first polls Drive changes, then advances exactly one durable stage.
+          # Repeating the call is safe: completed stages are detected from persisted state.
           for step in 1 2 3 4 5 6; do
             response_file=$(mktemp)
             status=$(curl -sS --max-time 300 -o "$response_file" -w '%{http_code}' \
               -X POST "$base/api/automation/process-next-stage")
 
             echo "Automation step $step -> HTTP $status"
-            cat "$response_file" | jq '{ok,idle,reportId,stage,message,contentId,productId}' 2>/dev/null || cat "$response_file"
+            cat "$response_file" | jq '{ok,idle,reportId,stage,message,contentId,productId,driveImport}' 2>/dev/null || cat "$response_file"
 
             if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
               echo 'Stage deferred. The app recorded the interruption and the next scheduled run will retry safely.'
