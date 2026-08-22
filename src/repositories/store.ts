@@ -121,16 +121,37 @@ export class Store {
     });
   }
 
-  async addLog(input: Omit<PublicationLog, 'id' | 'timestamp'>): Promise<PublicationLog> {
+  async markContentPublished(id: string, publishedAt = new Date().toISOString()): Promise<{ content: ContentItem; changed: boolean }> {
+    return this.db.mutate((db) => {
+      const index = db.contents.findIndex((x) => x.id === id);
+      if (index < 0) throw new NotFoundError('Content');
+      const current = db.contents[index]!;
+      if (current.status === 'PUBLISHED') return { content: current, changed: false };
+      const updated: ContentItem = {
+        ...current,
+        status: 'PUBLISHED',
+        publishedAt: current.publishedAt ?? publishedAt,
+        updatedAt: new Date().toISOString(),
+      };
+      db.contents[index] = updated;
+      return { content: updated, changed: true };
+    });
+  }
+
+  async addLogWithOutcome(input: Omit<PublicationLog, 'id' | 'timestamp'>): Promise<{ log: PublicationLog; created: boolean }> {
     const log: PublicationLog = { ...input, id: randomUUID(), timestamp: new Date().toISOString() };
     return this.db.mutate((db) => {
       if (input.result === 'SUCCESS') {
         const existing = db.logs.find((x) => x.idempotencyKey === input.idempotencyKey && x.result === 'SUCCESS');
-        if (existing) return existing;
+        if (existing) return { log: existing, created: false };
       }
       db.logs.push(log);
-      return log;
+      return { log, created: true };
     });
+  }
+
+  async addLog(input: Omit<PublicationLog, 'id' | 'timestamp'>): Promise<PublicationLog> {
+    return (await this.addLogWithOutcome(input)).log;
   }
   async listLogs() { return (await this.db.read()).logs; }
   async findSuccessfulLog(idempotencyKey: string) {
