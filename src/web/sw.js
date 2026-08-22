@@ -65,6 +65,24 @@ async function savePushEvent(data){
   }catch{return null}
 }
 
+async function resolveNotificationUrl(notification){
+  const raw=notification.data?.url||'/';
+  const tag=String(notification.tag||'');
+  if(tag.startsWith('product-review-')){
+    const productId=tag.slice('product-review-'.length);
+    if(productId){
+      try{
+        const response=await fetch(`/api/products/${encodeURIComponent(productId)}`,{cache:'no-store'});
+        if(response.ok){
+          const product=await response.json();
+          if(product?.googleDriveUrl)return product.googleDriveUrl;
+        }
+      }catch{}
+    }
+  }
+  return raw;
+}
+
 function preferredTarget(rawUrl,windows){
   const origin=self.location.origin;
   let requested;
@@ -107,7 +125,8 @@ self.addEventListener('notificationclick',event=>{
   event.notification.close();
   event.waitUntil((async()=>{
     const windows=await clients.matchAll({type:'window',includeUncontrolled:true});
-    const target=preferredTarget(event.notification.data?.url||'/',windows);
+    const rawTarget=await resolveNotificationUrl(event.notification);
+    const target=preferredTarget(rawTarget,windows);
     let targetUrl;
     try{targetUrl=new URL(target)}catch{return}
 
