@@ -13,17 +13,45 @@ export class ClickUpNotificationWatchService {
   ) {}
 
   async status() {
-    const saved = await this.store.getClickUpWebhook();
+    let saved = await this.store.getClickUpWebhook();
+    if (!saved && this.clickup.enabled) {
+      try {
+        await this.ensure(canonicalWebhookEndpoint());
+        saved = await this.store.getClickUpWebhook();
+      } catch (error) {
+        return {
+          enabled: true,
+          configured: false,
+          active: false,
+          warning: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
     if (!saved) return { enabled: false, configured: false, active: false };
     if (!this.clickup.enabled) return { enabled: false, configured: true, active: false, webhookId: saved.id };
 
     try {
       const webhooks = await this.clickup.listWebhooks(saved.workspaceId);
       const current = webhooks.find((item) => item.id === saved.id);
+      if (!current || current.status === 'inactive') {
+        await this.ensure(saved.endpoint || canonicalWebhookEndpoint());
+        saved = await this.store.getClickUpWebhook() ?? saved;
+        const refreshed = await this.clickup.listWebhooks(saved.workspaceId);
+        const active = refreshed.find((item) => item.id === saved!.id);
+        return {
+          enabled: true,
+          configured: true,
+          active: Boolean(active && active.status !== 'inactive'),
+          webhookId: saved.id,
+          endpoint: saved.endpoint,
+          event: 'taskStatusUpdated',
+          selfHealed: true,
+        };
+      }
       return {
         enabled: true,
         configured: true,
-        active: Boolean(current && current.status !== 'inactive'),
+        active: true,
         webhookId: saved.id,
         endpoint: saved.endpoint,
         event: 'taskStatusUpdated',
@@ -122,6 +150,12 @@ export class ClickUpNotificationWatchService {
     const reconciliation = await this.publishing.reconcileClickUpWatchResults();
     return { ok: true, taskId: typeof body.task_id === 'string' ? body.task_id : undefined, reconciliation };
   }
+}
+
+function canonicalWebhookEndpoint(): string {
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() || 'ghaith-web-content-os.vercel.app';
+  const origin = /^https?:\/\//i.test(host) ? host.replace(/\/$/, '') : `https://${host.replace(/\/$/, '')}`;
+  return `${origin}/api/webhooks/clickup`;
 }
 
 function validSignature(rawBody: Buffer, signature: string, secret: string): boolean {
