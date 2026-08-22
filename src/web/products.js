@@ -1,4 +1,5 @@
 (() => {
+  const initialProductRequested = (() => { const u = new URL(location.href); return u.searchParams.get('product') === '1' || u.searchParams.get('view') === 'products'; })();
   let products = [];
   let loading = false;
 
@@ -186,5 +187,5 @@
   qs('#refreshIntegrationsBtn')?.addEventListener('click', () => setTimeout(() => loadProducts(false), 400));
 
   loadProducts(false);
-  if (new URL(location.href).searchParams.get('product') === '1') setTimeout(() => showProducts({ push: false }), 0);
+  if (initialProductRequested) setTimeout(() => showProducts({ push: false }), 80);
 })();
