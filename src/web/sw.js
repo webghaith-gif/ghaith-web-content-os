@@ -67,6 +67,10 @@ async function savePushEvent(data){
 
 async function resolveNotificationUrl(notification){
   const raw=notification.data?.url||'/';
+  try{
+    const parsed=new URL(raw,self.location.origin);
+    if(parsed.origin===self.location.origin&&parsed.pathname.startsWith('/api/drive-view/'))return parsed.href;
+  }catch{}
   const tag=String(notification.tag||'');
   if(tag.startsWith('product-review-')){
     const productId=tag.slice('product-review-'.length);
@@ -75,6 +79,7 @@ async function resolveNotificationUrl(notification){
         const response=await fetch(`/api/products/${encodeURIComponent(productId)}`,{cache:'no-store'});
         if(response.ok){
           const product=await response.json();
+          if(product?.internalDriveUrl)return product.internalDriveUrl;
           if(product?.googleDriveUrl)return product.googleDriveUrl;
         }
       }catch{}
@@ -88,6 +93,7 @@ function preferredTarget(rawUrl,windows){
   let requested;
   try{requested=new URL(rawUrl||'/',origin)}catch{requested=new URL('/',origin)}
   if(requested.origin!==origin)return requested.href;
+  if(!['/','/browser.html','/app-standalone.html'].includes(requested.pathname))return requested.href;
 
   const query=requested.search||'';
   const hash=requested.hash||'';
@@ -128,7 +134,7 @@ self.addEventListener('notificationclick',event=>{
     const rawTarget=await resolveNotificationUrl(event.notification);
     const target=preferredTarget(rawTarget,windows);
     let targetUrl;
-    try{targetUrl=new URL(target)}catch{return}
+    try{targetUrl=new URL(target,self.location.origin)}catch{return}
 
     if(targetUrl.origin!==self.location.origin){
       return clients.openWindow?clients.openWindow(targetUrl.href):undefined;
