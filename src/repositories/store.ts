@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { ContentItem, Opportunity, PublicationLog, Report } from '../core/types';
+import type { ContentItem, Opportunity, ProductDraft, PublicationLog, Report, ReportAutomationState } from '../core/types';
 import { NotFoundError } from '../core/errors';
 import type {
   CanvaOAuthPendingState,
@@ -50,6 +50,18 @@ export class Store {
       const index = db.reports.findIndex((x) => x.id === id);
       if (index < 0) throw new NotFoundError('Report');
       db.reports[index] = { ...db.reports[index]!, ...patch };
+      return db.reports[index]!;
+    });
+  }
+  async patchReportAutomation(id: string, patch: Partial<ReportAutomationState>): Promise<Report> {
+    return this.db.mutate((db) => {
+      const index = db.reports.findIndex((x) => x.id === id);
+      if (index < 0) throw new NotFoundError('Report');
+      const current = db.reports[index]!;
+      db.reports[index] = {
+        ...current,
+        automation: { version: 1, ...(current.automation ?? {}), ...patch },
+      };
       return db.reports[index]!;
     });
   }
@@ -118,6 +130,35 @@ export class Store {
       const current = db.contents[index]!;
       const updated: ContentItem = { ...current, ...patch, id: current.id, updatedAt: new Date().toISOString() };
       db.contents[index] = updated;
+      return updated;
+    });
+  }
+
+  async createProduct(input: Omit<ProductDraft, 'id' | 'createdAt' | 'updatedAt'>): Promise<{ product: ProductDraft; created: boolean }> {
+    const existing = (await this.db.read()).products.find((item) => item.opportunityId === input.opportunityId && item.status !== 'ARCHIVED');
+    if (existing) return { product: existing, created: false };
+    const now = new Date().toISOString();
+    const product: ProductDraft = { ...input, id: randomUUID(), createdAt: now, updatedAt: now };
+    return this.db.mutate((db) => {
+      const duplicate = db.products.find((item) => item.opportunityId === input.opportunityId && item.status !== 'ARCHIVED');
+      if (duplicate) return { product: duplicate, created: false };
+      db.products.push(product);
+      return { product, created: true };
+    });
+  }
+  async listProducts() { return (await this.db.read()).products; }
+  async getProduct(id: string) {
+    const item = (await this.db.read()).products.find((x) => x.id === id);
+    if (!item) throw new NotFoundError('Product');
+    return item;
+  }
+  async updateProduct(id: string, patch: Partial<ProductDraft>): Promise<ProductDraft> {
+    return this.db.mutate((db) => {
+      const index = db.products.findIndex((x) => x.id === id);
+      if (index < 0) throw new NotFoundError('Product');
+      const current = db.products[index]!;
+      const updated: ProductDraft = { ...current, ...patch, id: current.id, updatedAt: new Date().toISOString() };
+      db.products[index] = updated;
       return updated;
     });
   }
