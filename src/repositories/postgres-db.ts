@@ -28,6 +28,23 @@ ON CONFLICT (id) DO NOTHING
 
 const READ_CACHE_TTL_MS = 5 * 60 * 1000;
 
+function normalizeConnectionStringSsl(connectionString: string, ssl: boolean): string {
+  if (!ssl) return connectionString;
+  try {
+    const url = new URL(connectionString);
+    if (url.protocol === 'postgres:' || url.protocol === 'postgresql:') {
+      // SSL verification is configured explicitly on Pool below. Removing sslmode here
+      // avoids pg-connection-string interpreting legacy aliases (for example `require`)
+      // and emitting the pg v9 migration warning on every serverless invocation.
+      url.searchParams.delete('sslmode');
+      return url.toString();
+    }
+  } catch {
+    // Preserve non-URL connection strings unchanged; Pool will validate them.
+  }
+  return connectionString;
+}
+
 export class PostgresDb implements DatabaseBackend {
   private readonly pool: PoolLike;
   private ready: Promise<void> | undefined;
@@ -37,8 +54,9 @@ export class PostgresDb implements DatabaseBackend {
 
   constructor(connectionString: string, ssl: boolean, rejectUnauthorized = true, pool?: PoolLike) {
     if (!connectionString.trim()) throw new Error('DATABASE_URL is required for PostgreSQL storage.');
+    const normalizedConnectionString = normalizeConnectionStringSsl(connectionString, ssl);
     this.pool = pool ?? (new Pool({
-      connectionString,
+      connectionString: normalizedConnectionString,
       ssl: ssl ? { rejectUnauthorized } : false,
       max: 1,
       idleTimeoutMillis: 5_000,
