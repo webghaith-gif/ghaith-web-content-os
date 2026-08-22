@@ -3,6 +3,7 @@ import type { ContentItem, PublicationLog, PublishRequest, PublishResult } from 
 import { AppError } from '../core/errors';
 import { Store } from '../repositories/store';
 import { ApprovalService } from './approval.service';
+import { NotificationService, type AppNotification } from './notification.service';
 import { PlatformRegistry } from '../platforms/registry';
 import { ClickUpAdapter } from '../integrations/clickup.adapter';
 import { GoogleDriveFileReader } from '../integrations/google-drive-file-reader';
@@ -11,6 +12,7 @@ import { buildClickUpWatchPlans } from './clickup-watch-contract';
 
 export class PublishingOrchestrator {
   private readonly driveFiles: GoogleDriveFileReader;
+  private readonly notifications: NotificationService;
 
   constructor(
     private readonly store: Store,
@@ -20,6 +22,7 @@ export class PublishingOrchestrator {
     driveFiles?: GoogleDriveFileReader,
   ) {
     this.driveFiles = driveFiles ?? new GoogleDriveFileReader(store);
+    this.notifications = new NotificationService(store);
   }
 
   async publish(contentId: string) {
@@ -128,7 +131,7 @@ export class PublishingOrchestrator {
         const response = await this.platforms.get(normalizedPlatform).publish(payload);
         hadDryRun ||= Boolean(response.dryRun);
         const result = response.success ? (response.warning ? 'WARNING' : 'SUCCESS') : 'ERROR';
-        results.push(await this.store.addLog({
+        const outcome = await this.store.addLogWithOutcome({
           contentId: content.id,
           platform: normalizedPlatform,
           result,
@@ -139,9 +142,11 @@ export class PublishingOrchestrator {
           errorMessage: response.warning,
           processed: true,
           idempotencyKey: key,
-        }));
+        });
+        results.push(outcome.log);
+        if (outcome.created) await this.notifyPublicationLog(content, outcome.log);
       } catch (error) {
-        results.push(await this.store.addLog({
+        const outcome = await this.store.addLogWithOutcome({
           contentId: content.id,
           platform: normalizedPlatform,
           result: 'ERROR',
@@ -150,15 +155,20 @@ export class PublishingOrchestrator {
           errorMessage: error instanceof Error ? error.message : String(error),
           processed: true,
           idempotencyKey: key,
-        }));
+        });
+        results.push(outcome.log);
+        if (outcome.created) await this.notifyPublicationLog(content, outcome.log);
       }
     }
 
     const allCompleted = results.every((x) => x.result === 'SUCCESS' || x.result === 'WARNING');
     const livePublished = allCompleted && !hadDryRun;
     if (livePublished) {
-      const updated = await this.store.updateContent(content.id, { status: 'PUBLISHED', publishedAt: new Date().toISOString() });
-      await markClickUpTasksPublished(updated, this.clickup);
+      const transition = await this.store.markContentPublished(content.id);
+      if (transition.changed) {
+        await markClickUpTasksPublished(transition.content, this.clickup);
+        await this.notifyContentPublished(transition.content);
+      }
     }
 
     return { contentId, published: livePublished, dryRun: hadDryRun, mode: 'webhook', results };
@@ -213,18 +223,18 @@ export class PublishingOrchestrator {
           }
 
           const key = idempotencyKey(content.id, platform, content.revision);
-          const previous = await this.store.findSuccessfulLog(key);
-          if (!previous) {
-            await this.store.addLog({
-              contentId: content.id,
-              platform,
-              result: 'SUCCESS',
-              originalTaskId: taskId,
-              attempt: 1,
-              processed: true,
-              idempotencyKey: key,
-            });
+          const outcome = await this.store.addLogWithOutcome({
+            contentId: content.id,
+            platform,
+            result: 'SUCCESS',
+            originalTaskId: taskId,
+            attempt: 1,
+            processed: true,
+            idempotencyKey: key,
+          });
+          if (outcome.created) {
             syncedLogs += 1;
+            await this.notifyPublicationLog(content, outcome.log);
           }
         } catch (error) {
           allPublished = false;
@@ -233,11 +243,11 @@ export class PublishingOrchestrator {
       }
 
       if (allPublished) {
-        await this.store.updateContent(content.id, {
-          status: 'PUBLISHED',
-          publishedAt: content.publishedAt ?? new Date().toISOString(),
-        });
-        publishedContents += 1;
+        const transition = await this.store.markContentPublished(content.id, content.publishedAt ?? new Date().toISOString());
+        if (transition.changed) {
+          publishedContents += 1;
+          await this.notifyContentPublished(transition.content);
+        }
       }
     }
 
@@ -261,7 +271,7 @@ export class PublishingOrchestrator {
     }
 
     const key = idempotencyKey(content.id, platform, content.revision);
-    const log = await this.store.addLog({
+    const outcome = await this.store.addLogWithOutcome({
       contentId: content.id,
       platform,
       result: input.result,
@@ -274,15 +284,51 @@ export class PublishingOrchestrator {
       processed: true,
       idempotencyKey: key,
     });
+    if (outcome.created) await this.notifyPublicationLog(content, outcome.log);
 
     const logs = (await this.store.listLogs()).filter((x) => x.contentId === content.id);
     const platformDone = (p: string) => logs.some((x) => x.platform.toLowerCase() === p.toLowerCase() && (x.result === 'SUCCESS' || x.result === 'WARNING'));
     const allDone = content.platforms.every(platformDone);
-    if (allDone && content.status !== 'PUBLISHED') {
-      const updated = await this.store.updateContent(content.id, { status: 'PUBLISHED', publishedAt: new Date().toISOString() });
-      await markClickUpTasksPublished(updated, this.clickup);
+    if (allDone) {
+      const transition = await this.store.markContentPublished(content.id);
+      if (transition.changed) {
+        await markClickUpTasksPublished(transition.content, this.clickup);
+        await this.notifyContentPublished(transition.content);
+      }
     }
-    return { log, content: await this.store.getContent(content.id) };
+    return { log: outcome.log, content: await this.store.getContent(content.id) };
+  }
+
+  private async notifyPublicationLog(content: ContentItem, log: PublicationLog): Promise<void> {
+    const platform = platformLabel(log.platform);
+    const detail = log.errorMessage?.trim();
+    const body = detail ? `${content.title} — ${truncate(detail, 150)}` : content.title;
+    const title = log.result === 'SUCCESS'
+      ? `اكتمل مسار النشر على ${platform} ✅`
+      : log.result === 'WARNING'
+        ? `مسار النشر على ${platform} يحتاج انتباهًا ⚠️`
+        : `تعذر مسار النشر على ${platform} ❌`;
+    await this.safeNotify({
+      title,
+      body,
+      url: '/browser.html?view=logs',
+      tag: `publish-${content.id}-${log.platform}-${log.result}-${content.revision}-${log.attempt}`,
+    });
+  }
+
+  private async notifyContentPublished(content: ContentItem): Promise<void> {
+    const platforms = [...new Set(content.platforms.map(platformLabel))].join('، ');
+    await this.safeNotify({
+      title: 'اكتملت جميع مسارات النشر 🎉',
+      body: `${content.title}${platforms ? ` — ${platforms}` : ''}`,
+      url: '/browser.html?view=content',
+      tag: `content-published-${content.id}-${content.revision}`,
+    });
+  }
+
+  private async safeNotify(notification: AppNotification): Promise<void> {
+    try { await this.notifications.send(notification); }
+    catch (error) { console.warn('Publication notification delivery failed', error); }
   }
 }
 
@@ -296,6 +342,22 @@ function platformTaskId(content: ContentItem, platform: string): string | undefi
 
 function reconciliationTaskId(content: ContentItem, platform: string, targetCount: number): string | undefined {
   return content.clickupTaskIds?.[platform.toLowerCase()] ?? (targetCount === 1 ? content.clickupTaskId : undefined);
+}
+
+function platformLabel(platform: string): string {
+  const key = platform.trim().toLowerCase();
+  return ({
+    facebook: 'Facebook',
+    instagram: 'Instagram',
+    tiktok: 'TikTok',
+    pinterest: 'Pinterest',
+    youtube: 'YouTube',
+    x: 'X',
+  } as Record<string, string>)[key] ?? platform;
+}
+
+function truncate(value: string, max: number): string {
+  return value.length <= max ? value : `${value.slice(0, Math.max(0, max - 1))}…`;
 }
 
 async function markClickUpTasksPublished(content: ContentItem, clickup: ClickUpAdapter): Promise<void> {
