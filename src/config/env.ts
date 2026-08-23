@@ -65,9 +65,10 @@ export const env = {
   CLICKUP_STATUS_READY: process.env.CLICKUP_STATUS_READY?.trim() || 'ready',
   CLICKUP_STATUS_PUBLISHED: process.env.CLICKUP_STATUS_PUBLISHED?.trim() || 'published',
 
-  PUBLISH_MODE: (process.env.PUBLISH_MODE ?? 'clickup_watch').trim().toLowerCase(),
+  // Canonical publishing path is direct app → automation webhook. ClickUp remains an optional legacy/fallback mode.
+  PUBLISH_MODE: (process.env.PUBLISH_MODE ?? 'webhook').trim().toLowerCase(),
   // Vendor-neutral automation bridge. It can point to Make, n8n, or any compatible webhook.
-  // Legacy MAKE_* variables remain supported so the current scenario needs no migration.
+  // Legacy MAKE_* variables remain supported so existing environments need no migration.
   PUBLISH_WEBHOOK_URL: optionalUrl('PUBLISH_WEBHOOK_URL') ?? optionalUrl('AUTOMATION_WEBHOOK_URL') ?? optionalUrl('MAKE_WEBHOOK_URL'),
   PUBLISH_WEBHOOK_SECRET:
     process.env.PUBLISH_WEBHOOK_SECRET?.trim()
