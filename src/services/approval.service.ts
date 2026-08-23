@@ -1,6 +1,7 @@
-import type { AssetRef, ContentItem } from '../core/types';
+import type { ContentItem } from '../core/types';
 import { ApprovalRequiredError, AppError } from '../core/errors';
 import { Store } from '../repositories/store';
+import { buildPlatformPublishingPlan } from './publishing-media';
 
 export class ApprovalService {
   constructor(private readonly store: Store) {}
@@ -25,31 +26,9 @@ export class ApprovalService {
 }
 
 function validatePublishableMedia(content: ContentItem): void {
-  const requiredKind: Record<string, 'image' | 'video'> = {
-    facebook: 'image',
-    instagram: 'image',
-    pinterest: 'image',
-    tiktok: 'video',
-    youtube: 'video',
-  };
-
   for (const rawPlatform of content.platforms ?? []) {
     const platform = rawPlatform.trim().toLowerCase();
-    const required = requiredKind[platform];
-    if (!required) continue;
-
-    const found = (content.assets ?? []).some((asset: AssetRef) => {
-      if (asset.kind !== required || asset.provider === 'canva') return false;
-      const targets = (asset.platforms ?? []).map((value) => value.trim().toLowerCase()).filter(Boolean);
-      return targets.length === 0 || targets.includes(platform);
-    });
-
-    if (!found) {
-      throw new AppError(
-        `${platform} requires one publishable ${required} attachment before READY.`,
-        409,
-        'MISSING_PUBLISHABLE_MEDIA',
-      );
-    }
+    if (!platform || platform === 'x') continue;
+    buildPlatformPublishingPlan(content, platform);
   }
 }
