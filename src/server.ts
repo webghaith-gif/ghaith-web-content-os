@@ -142,6 +142,21 @@ try {
               tag: 'drive-files-summary',
             }).catch((error) => console.warn('Drive summary notification failed', error));
           }
+
+          // Drive push notifications are the immediate, free trigger on Vercel Hobby.
+          // Scan the report/GPT-package inbox now instead of waiting for a frequent cron,
+          // then advance exactly one durable pipeline stage. This keeps the approval gate intact.
+          try {
+            const driveImport = await driveReports.importPendingChanges();
+            const gptPackages = driveImport.gptPackages as { imported?: unknown[] } | undefined;
+            const importedSomething = driveImport.imported.length > 0 || Boolean(gptPackages?.imported?.length);
+            if (importedSomething) {
+              await pipeline.processNextStage(oidcToken);
+            }
+          } catch (error) {
+            console.warn('Drive-triggered report pipeline advance deferred', error);
+          }
+
           res.writeHead(204, { 'Cache-Control': 'no-store' });
           return res.end();
         } catch (error) {
