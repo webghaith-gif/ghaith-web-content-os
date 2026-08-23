@@ -8,6 +8,8 @@ const PROCESSED_MARKER = '[PROCESSED]';
 
 type GptDriveManifest = GptPackageIntakeInput & {
   reportId?: string;
+  /** Preview packages are GPT-authored text/product drafts only. No Canva/final-media gate is crossed. */
+  previewOnly?: boolean;
   /** Use "none" only when GPT deliberately concludes that the selected opportunity should not create a product. */
   productDecision?: 'draft' | 'none';
 };
@@ -24,22 +26,15 @@ interface DriveManifestFile {
 /**
  * Zero-API-cost bridge for ChatGPT-authored packages.
  *
- * ChatGPT/Canva writes the finished editorial package as a Google Doc (or JSON/text file)
- * whose name starts with `Ghaith Web GPT Package —`. The existing 5-minute pipeline scans
- * Drive, parses the package, exports the referenced Canva designs, pairs every asset with its
- * platform copy, archives publishable binaries to Drive, and leaves the result IN_REVIEW.
+ * ChatGPT writes a Google Doc (or JSON/text file) whose name starts with
+ * `Ghaith Web GPT Package —`. A previewOnly manifest is persisted as a DRAFT in Neon
+ * without Canva export, runtime-Drive archive, READY, ClickUp, Make, or publishing.
+ * After explicit user approval, a later final manifest may include Canva/final assets and
+ * the existing GptPackageIntakeService resumes the normal IN_REVIEW pipeline.
  *
  * The manifest may provide opportunityId directly, or only reportId. In the latter case the
  * package waits safely until report analysis has selected its strongest opportunity, then resumes.
- * This lets the ChatGPT automation write the report and the package in the same run without
- * waiting for the GitHub/Vercel pipeline to finish opportunity extraction first.
- *
- * Successfully consumed files receive a durable [PROCESSED] suffix in Drive. This prevents an
- * older manifest from being re-consumed after a newer revision replaces the content's media list.
- * Failed/waiting manifests keep their original name and are retried safely.
- *
- * Canva remains the editable visual library, Drive the durable handoff/archive, and
- * Ghaith Web Content OS the coordinator. No Gemini/OpenAI API call is made here.
+ * Successfully consumed files receive a durable [PROCESSED] suffix in Drive.
  */
 export class GptDriveIntakeService {
   private readonly oauth: GoogleDriveOAuthManager;
@@ -85,11 +80,15 @@ export class GptDriveIntakeService {
         parsed.content ??= { package: {} } as GptPackageIntakeInput['content'];
         parsed.content.assets = [...(parsed.content.assets ?? []), manifestAsset];
 
-        const result = await this.intake.ingest(parsed);
+        const result = parsed.previewOnly
+          ? await this.ingestPreview(parsed)
+          : await this.intake.ingest(parsed);
+
         if (!parsed.product && parsed.productDecision === 'none') {
+          const now = new Date().toISOString();
           await this.store.patchReportAutomation(result.reportId, {
-            productSkippedAt: new Date().toISOString(),
-            productReadyForReviewAt: new Date().toISOString(),
+            productSkippedAt: now,
+            productReadyForReviewAt: now,
             lastError: undefined,
             lastErrorAt: undefined,
           });
@@ -104,7 +103,12 @@ export class GptDriveIntakeService {
 
         await this.markProcessed(file, accessToken).catch((error) => console.warn(`Could not mark GPT package ${file.id} processed`, error));
 
-        await this.safeNotify({
+        await this.safeNotify(parsed.previewOnly ? {
+          title: 'حزمة GPT جاهزة للمعاينة ✍️',
+          body: `${result.content.title} — حُفظت كمسودة DRAFT فقط؛ لم تُرسل إلى Canva أو READY أو النشر.`,
+          url: `/browser.html?view=content&content=${encodeURIComponent(result.content.id)}`,
+          tag: `gpt-drive-preview-${file.id}`,
+        } : {
           title: 'حزمة GPT + Canva وصلت إلى التطبيق ✅',
           body: parsed.productDecision === 'none' && !parsed.product
             ? `${result.content.title} — تم ربط البصريات بالنصوص وحفظها في Drive؛ لا يوجد منتج لهذه الفرصة بقرار GPT.`
@@ -120,6 +124,114 @@ export class GptDriveIntakeService {
     }
 
     return { ok: failed.length === 0, scanned: candidates.length, imported, ignored, failed };
+  }
+
+  /**
+   * Persist the editorial package before visual approval. This is deliberately separate from
+   * GptPackageIntakeService because that service represents the post-approval/final-media gate.
+   */
+  private async ingestPreview(manifest: GptDriveManifest) {
+    const opportunityId = requiredText(manifest.opportunityId, 'opportunityId');
+    const opportunity = await this.store.getOpportunity(opportunityId);
+    const report = await this.store.getReport(opportunity.reportId);
+    const contentInput = manifest.content;
+    if (!contentInput?.package || typeof contentInput.package !== 'object') {
+      throw new Error('content.package is required for a GPT preview.');
+    }
+
+    const platforms = normalizePreviewPlatforms(manifest.platforms);
+    const allContents = await this.store.listContents();
+    const current = allContents.find((item) => item.opportunityId === opportunityId && item.status !== 'ARCHIVED' && item.status !== 'PUBLISHED');
+    if (current && !['DRAFT', 'IN_PROGRESS'].includes(current.status)) {
+      throw new Error(`Content ${current.id} is already ${current.status}; a preview package cannot downgrade it.`);
+    }
+    const published = allContents.find((item) => item.opportunityId === opportunityId && item.status === 'PUBLISHED');
+    if (published) throw new Error('A published package already exists for this opportunity.');
+
+    const assets = dedupeDocumentAssets([
+      ...(current?.assets ?? []).filter((asset) => asset.kind === 'document'),
+      ...(contentInput.assets ?? []).filter((asset) => asset.kind === 'document'),
+    ]);
+    const patch = {
+      title: cleanText(contentInput.title) || opportunity.title,
+      topic: cleanText(contentInput.topic) || opportunity.title,
+      sourceReportId: report.id,
+      opportunityId,
+      targetAudience: cleanText(contentInput.targetAudience),
+      objective: cleanText(contentInput.objective) || 'GPT-authored preview package awaiting explicit visual approval.',
+      platforms,
+      contentType: 'gpt-curated-multi-platform-package',
+      package: contentInput.package,
+      assets,
+      status: 'DRAFT' as const,
+    };
+
+    const content = current
+      ? await this.store.updateContent(current.id, {
+          ...patch,
+          googleDriveUrls: current.googleDriveUrls ?? [],
+          revision: current.revision + 1,
+        })
+      : await this.store.createContent({ ...patch, googleDriveUrls: [] });
+
+    const now = new Date().toISOString();
+    await this.store.patchReportAutomation(report.id, {
+      opportunityId,
+      opportunitiesReadyAt: report.automation?.opportunitiesReadyAt ?? now,
+      contentId: content.id,
+      contentReadyAt: report.automation?.contentReadyAt ?? now,
+      lastError: undefined,
+      lastErrorAt: undefined,
+    });
+
+    let product;
+    if (manifest.product) {
+      const input = manifest.product;
+      const title = requiredText(input.title, 'product.title');
+      const productType = requiredText(input.productType, 'product.productType');
+      const targetAudience = requiredText(input.targetAudience, 'product.targetAudience');
+      const problem = requiredText(input.problem, 'product.problem');
+      const promise = requiredText(input.promise, 'product.promise');
+      const draftBody = requiredText(input.draftBody, 'product.draftBody');
+      const deliverables = stringList(input.deliverables);
+      const outline = stringList(input.outline);
+      if (!deliverables.length || !outline.length) throw new Error('Product preview requires deliverables and outline.');
+
+      const products = await this.store.listProducts();
+      const existing = products.find((item) => item.opportunityId === opportunityId && item.status !== 'ARCHIVED');
+      const productPatch = {
+        reportId: report.id,
+        opportunityId,
+        title,
+        productType,
+        targetAudience,
+        problem,
+        promise,
+        deliverables,
+        outline,
+        draftBody,
+        coverPrompt: cleanText(input.coverPrompt),
+        qualityReview: input.qualityReview,
+        status: 'IN_REVIEW' as const,
+      };
+      product = existing
+        ? await this.store.updateProduct(existing.id, productPatch)
+        : (await this.store.createProduct(productPatch)).product;
+      await this.store.patchReportAutomation(report.id, {
+        productId: product.id,
+        productReadyForReviewAt: now,
+      });
+    }
+
+    return {
+      ok: true,
+      source: 'gpt-content-pro-preview',
+      reportId: report.id,
+      opportunityId,
+      content,
+      product,
+      message: 'GPT preview saved as DRAFT without crossing the visual approval or publishing gates.',
+    };
   }
 
   private async resolveOpportunity(manifest: GptDriveManifest) {
@@ -206,6 +318,36 @@ function parseManifest(raw: string): GptDriveManifest {
     }
   }
   throw new Error('GPT package manifest is not valid JSON. Keep the Drive handoff document as one JSON object only.');
+}
+
+function normalizePreviewPlatforms(value: unknown): string[] {
+  if (!Array.isArray(value)) throw new Error('platforms must be a non-empty string array.');
+  const platforms = [...new Set(value.filter((item): item is string => typeof item === 'string').map((item) => item.trim().toLowerCase()).filter(Boolean))];
+  if (!platforms.length) throw new Error('platforms must be a non-empty string array.');
+  return platforms;
+}
+
+function requiredText(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`${field} is required.`);
+  return value.trim();
+}
+
+function cleanText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String).map((item) => item.trim()).filter(Boolean) : [];
+}
+
+function dedupeDocumentAssets<T extends { kind: string; url: string; provider?: string; providerId?: string }>(assets: T[]): T[] {
+  const seen = new Set<string>();
+  return assets.filter((asset) => {
+    const key = `${asset.kind}:${asset.provider ?? ''}:${asset.providerId ?? ''}:${asset.url}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function isSupportedManifestMime(mimeType?: string) {
