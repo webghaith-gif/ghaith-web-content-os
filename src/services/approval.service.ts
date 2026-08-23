@@ -1,4 +1,4 @@
-import type { ContentItem } from '../core/types';
+import type { AssetRef, ContentItem } from '../core/types';
 import { ApprovalRequiredError, AppError } from '../core/errors';
 import { Store } from '../repositories/store';
 
@@ -14,10 +14,42 @@ export class ApprovalService {
   async approve(id: string, approvedBy = 'user'): Promise<ContentItem> {
     const content = await this.store.getContent(id);
     if (content.status !== 'IN_REVIEW') throw new AppError('Only IN_REVIEW content can be approved.', 409, 'INVALID_TRANSITION');
+    validatePublishableMedia(content);
     return this.store.updateContent(id, { status: 'READY', approvedAt: new Date().toISOString(), approvedBy });
   }
 
   ensureReady(content: ContentItem): void {
     if (content.status !== 'READY') throw new ApprovalRequiredError();
+    validatePublishableMedia(content);
+  }
+}
+
+function validatePublishableMedia(content: ContentItem): void {
+  const requiredKind: Record<string, 'image' | 'video'> = {
+    facebook: 'image',
+    instagram: 'image',
+    pinterest: 'image',
+    tiktok: 'video',
+    youtube: 'video',
+  };
+
+  for (const rawPlatform of content.platforms ?? []) {
+    const platform = rawPlatform.trim().toLowerCase();
+    const required = requiredKind[platform];
+    if (!required) continue;
+
+    const found = (content.assets ?? []).some((asset: AssetRef) => {
+      if (asset.kind !== required || asset.provider === 'canva') return false;
+      const targets = (asset.platforms ?? []).map((value) => value.trim().toLowerCase()).filter(Boolean);
+      return targets.length === 0 || targets.includes(platform);
+    });
+
+    if (!found) {
+      throw new AppError(
+        `${platform} requires one publishable ${required} attachment before READY.`,
+        409,
+        'MISSING_PUBLISHABLE_MEDIA',
+      );
+    }
   }
 }
