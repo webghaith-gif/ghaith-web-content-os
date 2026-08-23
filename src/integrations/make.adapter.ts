@@ -1,6 +1,7 @@
 import { env } from '../config/env';
 import type { PublishRequest, PublishResponse } from '../core/types';
-import type { Store } from '../repositories/store';
+import { createDatabase } from '../repositories/database-factory';
+import { Store } from '../repositories/store';
 import { fetchJson } from '../utils/http';
 
 export interface MakeConnectionProbe {
@@ -12,10 +13,14 @@ export interface MakeConnectionProbe {
 
 /** Vendor-neutral direct publishing webhook bridge (Make, n8n, or compatible HTTP workflow). */
 export class MakeAdapter {
-  constructor(private readonly store?: Store) {}
+  private readonly store: Store;
 
-  /** Environment-only compatibility getter. Prefer isEnabled() when a Store is available. */
-  get enabled() { return Boolean(env.PUBLISH_WEBHOOK_URL); }
+  constructor(store?: Store) {
+    this.store = store ?? new Store(createDatabase());
+  }
+
+  /** The bridge is runtime-configurable from persistent state; testConnection verifies the actual endpoint. */
+  get enabled() { return true; }
 
   async isEnabled(): Promise<boolean> {
     return Boolean((await this.runtime()).url);
@@ -102,7 +107,7 @@ export class MakeAdapter {
   }
 
   private async runtime(): Promise<{ url?: string; secret?: string }> {
-    const persisted = this.store ? await this.store.getPublishingRuntime() : undefined;
+    const persisted = await this.store.getPublishingRuntime();
     return {
       url: persisted?.webhookUrl?.trim() || env.PUBLISH_WEBHOOK_URL,
       secret: persisted?.webhookSecret?.trim() || env.PUBLISH_WEBHOOK_SECRET,
