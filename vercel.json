@@ -1,6 +1,22 @@
 {
   "rewrites": [
     {
+      "source": "/darskit",
+      "destination": "/darskit.html"
+    },
+    {
+      "source": "/darskit/privacy",
+      "destination": "/darskit-privacy.html"
+    },
+    {
+      "source": "/darskit/terms",
+      "destination": "/darskit-terms.html"
+    },
+    {
+      "source": "/darskit/support",
+      "destination": "/darskit-support.html"
+    },
+    {
       "source": "/robots.txt",
       "destination": "https://raw.githubusercontent.com/webghaith-gif/ghaith-web-content-os/main/src/web/robots.txt"
     },
