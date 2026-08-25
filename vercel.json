@@ -25,6 +25,24 @@
       "destination": "https://raw.githubusercontent.com/webghaith-gif/ghaith-web-content-os/main/src/web/sitemap.xml"
     }
   ],
+  "headers": [
+    {
+      "source": "/darskit",
+      "headers": [{ "key": "Content-Type", "value": "text/html; charset=utf-8" }]
+    },
+    {
+      "source": "/darskit/privacy",
+      "headers": [{ "key": "Content-Type", "value": "text/html; charset=utf-8" }]
+    },
+    {
+      "source": "/darskit/terms",
+      "headers": [{ "key": "Content-Type", "value": "text/html; charset=utf-8" }]
+    },
+    {
+      "source": "/darskit/support",
+      "headers": [{ "key": "Content-Type", "value": "text/html; charset=utf-8" }]
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/drive-watch",
