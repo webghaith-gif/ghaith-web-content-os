@@ -1,0 +1,37 @@
+name: DarsKit Canva review candidate
+on:
+  push:
+    branches: [darskit-canva-review-fix]
+  pull_request:
+    paths: ['darskit-canva-app/**']
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: darskit-canva-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install
+      - run: npm run review:check
+      - run: npm test
+      - run: npm run lint:types
+      - run: npm run build
+      - name: Verify review bundle
+        run: |
+          test -f dist/app.js
+          bytes=$(stat -c%s dist/app.js)
+          echo "bundle_bytes=$bytes"
+          test "$bytes" -lt 5000000
+          if grep -q 'registerPackageVersion("design","2.12.0"' dist/app.js; then
+            echo 'Old @canva/design 2.12.0 registration is still present' >&2
+            exit 1
+          fi
+          grep -q 'registerPackageVersion("design","2.13.0"' dist/app.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: darskit-canva-review-bundle
+          path: darskit-canva-app/dist/app.js
