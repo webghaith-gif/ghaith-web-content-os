@@ -1,0 +1,31 @@
+{
+  "name": "darskit-canva-app",
+  "version": "15.0.0",
+  "private": true,
+  "engines": {
+    "node": "^22 || ^24"
+  },
+  "scripts": {
+    "start": "npx @canva/cli apps start",
+    "build": "npx @canva/cli apps build",
+    "lint:types": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "review:check": "node scripts-review-check.mjs"
+  },
+  "dependencies": {
+    "@canva/app-ui-kit": "5.14.1",
+    "@canva/design": "2.13.0",
+    "@canva/intents": "^2.7.0",
+    "mammoth": "^1.10.0",
+    "pdfjs-dist": "^5.4.149",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@canva/app-scripts": "^1.1.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.9.2"
+  }
+}
