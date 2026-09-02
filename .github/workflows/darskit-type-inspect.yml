@@ -1,0 +1,21 @@
+name: DarsKit UI Kit type inspection
+on:
+  push:
+    branches: [darskit-canva-review-fix]
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: |
+          mkdir -p /tmp/canva-types && cd /tmp/canva-types
+          npm init -y >/dev/null
+          npm install --silent @canva/app-ui-kit@5.14.1 @canva/design@2.13.0
+          echo '=== FileInput references ==='
+          grep -R -n -E 'FileInputProps|FileInput.*=' node_modules/@canva/app-ui-kit/dist node_modules/@canva/app-ui-kit/build 2>/dev/null | head -80 || true
+          echo '=== Select/FormField declarations ==='
+          grep -R -n -E 'type FileInput|interface FileInput|declare.*FileInput|FileInput:' node_modules/@canva/app-ui-kit 2>/dev/null | head -120 || true
+          echo '=== addPage declaration ==='
+          grep -R -n -E 'addPage' node_modules/@canva/design 2>/dev/null | head -60 || true
