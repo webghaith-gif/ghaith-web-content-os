@@ -13,9 +13,11 @@ jobs:
           mkdir -p /tmp/canva-types && cd /tmp/canva-types
           npm init -y >/dev/null
           npm install --silent @canva/app-ui-kit@5.14.1 @canva/design@2.13.0
-          echo '=== FileInput references ==='
-          grep -R -n -E 'FileInputProps|FileInput.*=' node_modules/@canva/app-ui-kit/dist node_modules/@canva/app-ui-kit/build 2>/dev/null | head -80 || true
-          echo '=== Select/FormField declarations ==='
-          grep -R -n -E 'type FileInput|interface FileInput|declare.*FileInput|FileInput:' node_modules/@canva/app-ui-kit 2>/dev/null | head -120 || true
-          echo '=== addPage declaration ==='
-          grep -R -n -E 'addPage' node_modules/@canva/design 2>/dev/null | head -60 || true
+          echo '=== PUBLIC FileInput type ==='
+          cat node_modules/@canva/app-ui-kit/dist/esm/ui/apps/developing/ui_kit/components/form/upload/file_input.d.ts
+          echo '=== BASE FileDrop/FileInput types ==='
+          cat node_modules/@canva/app-ui-kit/dist/esm/ui/base/form/upload/file_input/private/file_input.d.ts
+          cat node_modules/@canva/app-ui-kit/dist/esm/ui/base/form/upload/file_drop/file_drop.d.ts 2>/dev/null || true
+          cat node_modules/@canva/app-ui-kit/dist/esm/ui/base/form/upload/file_input/private/file_input_internal.d.ts
+          echo '=== addPage exact declaration ==='
+          sed -n '260,410p' node_modules/@canva/design/index.d.ts
