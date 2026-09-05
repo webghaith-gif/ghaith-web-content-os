@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { ContentItem, PublicationLog, PublishRequest, PublishResult } from '../core/types';
+import type { AssetRef, ContentItem, PublicationLog, PublishRequest, PublishResult } from '../core/types';
 import { AppError } from '../core/errors';
 import { Store } from '../repositories/store';
 import { ApprovalService } from './approval.service';
@@ -9,9 +9,12 @@ import { ClickUpAdapter } from '../integrations/clickup.adapter';
 import { GoogleDriveFileReader } from '../integrations/google-drive-file-reader';
 import { env } from '../config/env';
 import { buildClickUpWatchPlans } from './clickup-watch-contract';
+import { DriveViewerService } from './drive-viewer.service';
+import { buildPlatformPublishingPlan } from './publishing-media';
 
 export class PublishingOrchestrator {
   private readonly driveFiles: GoogleDriveFileReader;
+  private readonly driveViewer: DriveViewerService;
   private readonly notifications: NotificationService;
 
   constructor(
@@ -22,6 +25,7 @@ export class PublishingOrchestrator {
     driveFiles?: GoogleDriveFileReader,
   ) {
     this.driveFiles = driveFiles ?? new GoogleDriveFileReader(store);
+    this.driveViewer = new DriveViewerService(store);
     this.notifications = new NotificationService(store);
   }
 
@@ -30,25 +34,24 @@ export class PublishingOrchestrator {
     this.approval.ensureReady(content);
     if (content.platforms.length === 0) throw new AppError('Content has no target platforms.', 400);
 
-    // Ghaith Web's practical publishing mode: ClickUp task prefixes are the Make router trigger.
-    // Never expose [FB]/[IG]/[TT]/[PIN]/[YT] until every target task has passed preflight and has its media attached.
-    if (env.PUBLISH_MODE === 'clickup_watch') {
+    const publishMode = await this.publishMode();
+
+    // Legacy/fallback path. The canonical path is now direct webhook and does not require ClickUp.
+    if (publishMode === 'clickup_watch') {
       if (!this.clickup.enabled) {
         return {
           contentId,
           published: false,
           dispatched: false,
           mode: 'clickup_watch',
-          warning: 'ClickUp is not connected. Configure CLICKUP_API_TOKEN; the canonical list ID is already built in.',
+          warning: 'ClickUp is not connected. Switch to webhook mode or configure ClickUp.',
           results: [],
         };
       }
 
-      // Pure preflight happens before any ClickUp mutation. X/future platforms are rejected here until Make has a route.
       const plans = buildClickUpWatchPlans(content);
       const taskIds: Record<string, string> = { ...(content.clickupTaskIds ?? {}) };
 
-      // Stage every task behind a neutral HOLD name. Make's current router cannot match these names.
       for (const plan of plans) {
         if (taskIds[plan.platform]) continue;
 
@@ -67,7 +70,6 @@ export class PublishingOrchestrator {
             await this.clickup.attachTaskFileFromUrl(task.id, plan.asset.url, plan.fileName);
           }
         } catch (error) {
-          // A task without the expected attachment must never become routable by Make.
           try { await this.clickup.updateStatus(task.id, 'archived'); } catch { /* best-effort quarantine */ }
           throw new AppError(
             `Failed to attach ${plan.platform} media: ${error instanceof Error ? error.message : String(error)}`,
@@ -83,7 +85,6 @@ export class PublishingOrchestrator {
         });
       }
 
-      // Only now reveal the platform prefix and READY status. Name + description + status are one ClickUp update.
       for (const plan of plans) {
         const taskId = taskIds[plan.platform];
         if (!taskId) throw new AppError(`Missing staged ClickUp task for ${plan.platform}.`, 500, 'CLICKUP_HANDOFF_FAILED');
@@ -95,39 +96,46 @@ export class PublishingOrchestrator {
         published: false,
         dispatched: true,
         mode: 'clickup_watch',
-        message: 'Platform-specific ClickUp tasks passed preflight, received media, and are now READY for the fixed Make Watch Tasks scenario.',
+        message: 'Platform-specific ClickUp tasks are READY for the legacy Make route.',
         tasks: plans.map((plan) => ({ platform: plan.platform, taskId: taskIds[plan.platform] })),
         results: [],
       };
     }
 
-    if (env.PUBLISH_MODE !== 'webhook') {
-      throw new AppError(`Unsupported PUBLISH_MODE: ${env.PUBLISH_MODE}`, 500, 'CONFIG_ERROR');
+    if (publishMode !== 'webhook') {
+      throw new AppError(`Unsupported PUBLISH_MODE: ${publishMode}`, 500, 'CONFIG_ERROR');
     }
 
     const results: PublicationLog[] = [];
     let hadDryRun = false;
 
     for (const platform of content.platforms) {
-      const normalizedPlatform = platform.toLowerCase();
+      const normalizedPlatform = platform.trim().toLowerCase();
       const key = idempotencyKey(content.id, normalizedPlatform, content.revision);
       const previous = await this.store.findSuccessfulLog(key);
       if (previous) { results.push(previous); continue; }
 
-      const payload: PublishRequest = {
-        contentId: content.id,
-        clickupTaskId: platformTaskId(content, normalizedPlatform),
-        platform: normalizedPlatform,
-        title: content.title,
-        caption: content.package.caption,
-        description: content.package.description,
-        mediaUrls: [...content.assets.map((a) => a.url), ...content.googleDriveUrls],
-        mediaType: content.contentType,
-        status: content.status,
-        idempotencyKey: key,
-      };
-
       try {
+        const plan = buildPlatformPublishingPlan(content, normalizedPlatform);
+        const variant = content.package.platformCopies?.[normalizedPlatform];
+        const mediaItems = plan.assets.map((asset) => ({
+          url: this.publicMediaUrl(asset),
+          kind: asset.kind as 'image' | 'video',
+        }));
+        const payload: PublishRequest = {
+          contentId: content.id,
+          platform: normalizedPlatform,
+          title: variant?.title?.trim() || content.title,
+          caption: variant?.caption?.trim() || content.package.caption,
+          description: variant?.description?.trim() || content.package.description,
+          mediaUrls: mediaItems.map((item) => item.url),
+          mediaItems,
+          mediaMode: plan.mediaMode,
+          mediaType: content.contentType,
+          status: content.status,
+          idempotencyKey: key,
+        };
+
         const response = await this.platforms.get(normalizedPlatform).publish(payload);
         hadDryRun ||= Boolean(response.dryRun);
         const result = response.success ? (response.warning ? 'WARNING' : 'SUCCESS') : 'ERROR';
@@ -135,7 +143,6 @@ export class PublishingOrchestrator {
           contentId: content.id,
           platform: normalizedPlatform,
           result,
-          originalTaskId: platformTaskId(content, normalizedPlatform),
           makeExecutionId: response.executionId,
           attempt: 1,
           publicUrl: response.publicUrl,
@@ -150,7 +157,6 @@ export class PublishingOrchestrator {
           contentId: content.id,
           platform: normalizedPlatform,
           result: 'ERROR',
-          originalTaskId: platformTaskId(content, normalizedPlatform),
           attempt: env.PUBLISH_MAX_RETRIES + 1,
           errorMessage: error instanceof Error ? error.message : String(error),
           processed: true,
@@ -161,11 +167,13 @@ export class PublishingOrchestrator {
       }
     }
 
-    const allCompleted = results.every((x) => x.result === 'SUCCESS' || x.result === 'WARNING');
+    const allCompleted = results.length === content.platforms.length
+      && results.every((x) => x.result === 'SUCCESS' || x.result === 'WARNING');
     const livePublished = allCompleted && !hadDryRun;
     if (livePublished) {
       const transition = await this.store.markContentPublished(content.id);
       if (transition.changed) {
+        // ClickUp is optional in webhook mode. Existing historical task links are mirrored only when present.
         await markClickUpTasksPublished(transition.content, this.clickup);
         await this.notifyContentPublished(transition.content);
       }
@@ -174,17 +182,8 @@ export class PublishingOrchestrator {
     return { contentId, published: livePublished, dryRun: hadDryRun, mode: 'webhook', results };
   }
 
-  /**
-   * Reconcile the canonical app state with the fixed Make Watch Tasks workflow.
-   *
-   * In clickup_watch mode Make owns the final external publish step and marks each
-   * platform task `published`. This method treats that ClickUp status as the
-   * durable acknowledgement, mirrors SUCCESS logs into the app, and promotes the
-   * content to PUBLISHED only after every target platform task is published.
-   * Transient ClickUp read failures are reported but never corrupt local state.
-   */
   async reconcileClickUpWatchResults() {
-    if (env.PUBLISH_MODE !== 'clickup_watch' || !this.clickup.enabled) {
+    if (await this.publishMode() !== 'clickup_watch' || !this.clickup.enabled) {
       return { checkedTasks: 0, publishedContents: 0, syncedLogs: 0, failures: [] as string[] };
     }
 
@@ -299,6 +298,20 @@ export class PublishingOrchestrator {
     return { log: outcome.log, content: await this.store.getContent(content.id) };
   }
 
+  private async publishMode(): Promise<string> {
+    const runtime = await this.store.getPublishingRuntime();
+    return (runtime?.mode ?? env.PUBLISH_MODE).trim().toLowerCase();
+  }
+
+  private publicMediaUrl(asset: AssetRef): string {
+    if (asset.providerId && (asset.provider === 'google-drive' || asset.provider === 'remotion')) {
+      const relative = this.driveViewer.linkForFileId(asset.providerId);
+      if (!relative) throw new AppError('Could not create a signed Drive media URL for publishing.', 503, 'PUBLISHING_MEDIA_URL_FAILED');
+      return new URL(relative, publicAppBaseUrl()).toString();
+    }
+    return asset.url;
+  }
+
   private async notifyPublicationLog(content: ContentItem, log: PublicationLog): Promise<void> {
     const platform = platformLabel(log.platform);
     const detail = log.errorMessage?.trim();
@@ -342,6 +355,14 @@ function platformTaskId(content: ContentItem, platform: string): string | undefi
 
 function reconciliationTaskId(content: ContentItem, platform: string, targetCount: number): string | undefined {
   return content.clickupTaskIds?.[platform.toLowerCase()] ?? (targetCount === 1 ? content.clickupTaskId : undefined);
+}
+
+function publicAppBaseUrl(): string {
+  const configured = env.APP_BASE_URL.trim();
+  if (configured && !/^https?:\/\/localhost(?::\d+)?\/?$/i.test(configured)) return configured;
+  const production = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() || process.env.VERCEL_URL?.trim();
+  if (production) return production.startsWith('http') ? production : `https://${production}`;
+  return configured || 'http://localhost:3000';
 }
 
 function platformLabel(platform: string): string {

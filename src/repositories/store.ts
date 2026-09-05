@@ -9,6 +9,7 @@ import type {
   GoogleDriveOAuthPendingState,
   GoogleDriveOAuthTokenState,
   GoogleDriveWatchState,
+  PublishingRuntimeState,
   PushSubscriptionState,
 } from './database';
 
@@ -88,7 +89,10 @@ export class Store {
       return opportunity;
     });
   }
-  async listOpportunities() { return (await this.db.read()).opportunities.sort((a, b) => b.score.total - a.score.total); }
+  async listOpportunities() {
+    return [...(await this.db.read()).opportunities]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
   async getOpportunity(id: string) {
     const item = (await this.db.read()).opportunities.find((x) => x.id === id);
     if (!item) throw new NotFoundError('Opportunity');
@@ -253,6 +257,22 @@ export class Store {
     await this.db.mutate((db) => {
       db.integrations.googleDrive ??= {};
       db.integrations.googleDrive.watch = watch;
+    });
+  }
+
+  async getPublishingRuntime(): Promise<PublishingRuntimeState | undefined> {
+    return (await this.freshRead()).integrations.publishing;
+  }
+  async setPublishingRuntime(patch: PublishingRuntimeState): Promise<PublishingRuntimeState> {
+    return this.db.mutate((db) => {
+      const current = db.integrations.publishing ?? {};
+      const updated: PublishingRuntimeState = {
+        ...current,
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      };
+      db.integrations.publishing = updated;
+      return updated;
     });
   }
 

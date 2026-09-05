@@ -1,5 +1,7 @@
 import { env } from '../config/env';
 import type { PublishRequest, PublishResponse } from '../core/types';
+import { createDatabase } from '../repositories/database-factory';
+import { Store } from '../repositories/store';
 import { fetchJson } from '../utils/http';
 
 export interface MakeConnectionProbe {
@@ -9,35 +11,36 @@ export interface MakeConnectionProbe {
   message?: string;
 }
 
-/**
- * Backward-compatible webhook publisher.
- *
- * The class keeps its historical name so existing imports do not break, but the
- * configured endpoint is now vendor-neutral: Make, n8n, or any compatible HTTP
- * workflow can receive the same normalized publishing payload.
- *
- * When a webhook secret is configured we send both the vendor-neutral
- * X-Ghaith-Webhook-Secret header and Make's x-make-apikey header. This keeps
- * existing receivers compatible while allowing a Make Custom Webhook protected
- * with API Key authentication to accept the same secret.
- */
+/** Vendor-neutral direct publishing webhook bridge (Make, n8n, or compatible HTTP workflow). */
 export class MakeAdapter {
-  get enabled() { return Boolean(env.PUBLISH_WEBHOOK_URL); }
+  private readonly store: Store;
+
+  constructor(store?: Store) {
+    this.store = store ?? new Store(createDatabase());
+  }
+
+  /** The bridge is runtime-configurable from persistent state; testConnection verifies the actual endpoint. */
+  get enabled() { return true; }
+
+  async isEnabled(): Promise<boolean> {
+    return Boolean((await this.runtime()).url);
+  }
 
   async testConnection(): Promise<MakeConnectionProbe> {
-    if (!env.PUBLISH_WEBHOOK_URL) {
+    const config = await this.runtime();
+    if (!config.url) {
       return {
         ok: false,
         enabled: false,
         mode: 'disabled',
-        message: 'PUBLISH_WEBHOOK_URL is not configured.',
+        message: 'Direct publishing webhook is not configured.',
       };
     }
 
     try {
-      const response = await fetch(env.PUBLISH_WEBHOOK_URL, {
+      const response = await fetch(config.url, {
         method: 'POST',
-        headers: webhookHeaders(),
+        headers: webhookHeaders(config.secret),
         body: JSON.stringify({
           action: 'connection_test',
           source: 'ghaith-web-content-os',
@@ -51,7 +54,7 @@ export class MakeAdapter {
           ok: false,
           enabled: true,
           mode: 'webhook',
-          message: `Make webhook returned HTTP ${response.status}${text ? `: ${text.slice(0, 180)}` : ''}`,
+          message: `Publishing webhook returned HTTP ${response.status}${text ? `: ${text.slice(0, 180)}` : ''}`,
         };
       }
 
@@ -59,7 +62,7 @@ export class MakeAdapter {
         ok: true,
         enabled: true,
         mode: 'webhook',
-        message: `Make webhook accepted the authenticated test request (HTTP ${response.status}).`,
+        message: `Publishing webhook accepted the test request (HTTP ${response.status}).`,
       };
     } catch (error) {
       return {
@@ -72,20 +75,21 @@ export class MakeAdapter {
   }
 
   async publish(payload: PublishRequest): Promise<PublishResponse> {
-    if (!env.PUBLISH_WEBHOOK_URL) {
+    const config = await this.runtime();
+    if (!config.url) {
       return {
         success: true,
         platform: payload.platform,
-        warning: 'DRY_RUN: PUBLISH_WEBHOOK_URL (or legacy MAKE_WEBHOOK_URL) not configured.',
+        warning: 'DRY_RUN: direct publishing webhook is not configured.',
         dryRun: true,
       };
     }
 
     const result = await fetchJson<Record<string, unknown>>(
-      env.PUBLISH_WEBHOOK_URL,
+      config.url,
       {
         method: 'POST',
-        headers: webhookHeaders(),
+        headers: webhookHeaders(config.secret),
         body: JSON.stringify(payload),
       },
       env.PUBLISH_MAX_RETRIES,
@@ -101,15 +105,23 @@ export class MakeAdapter {
       raw: result,
     };
   }
+
+  private async runtime(): Promise<{ url?: string; secret?: string }> {
+    const persisted = await this.store.getPublishingRuntime();
+    return {
+      url: persisted?.webhookUrl?.trim() || env.PUBLISH_WEBHOOK_URL,
+      secret: persisted?.webhookSecret?.trim() || env.PUBLISH_WEBHOOK_SECRET,
+    };
+  }
 }
 
-function webhookHeaders(): Record<string, string> {
+function webhookHeaders(secret?: string): Record<string, string> {
   return {
     'Content-Type': 'application/json',
-    ...(env.PUBLISH_WEBHOOK_SECRET
+    ...(secret
       ? {
-          'X-Ghaith-Webhook-Secret': env.PUBLISH_WEBHOOK_SECRET,
-          'x-make-apikey': env.PUBLISH_WEBHOOK_SECRET,
+          'X-Ghaith-Webhook-Secret': secret,
+          'x-make-apikey': secret,
         }
       : {}),
   };

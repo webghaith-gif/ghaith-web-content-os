@@ -1,0 +1,1 @@
+Deployment trigger for UI list ordering fix: newest items first across opportunities, reports, and publishing logs. No functional change beyond forcing Vercel to build the latest main commit.

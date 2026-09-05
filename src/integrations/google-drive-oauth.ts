@@ -21,6 +21,7 @@ interface GoogleDriveOAuthStatus {
   folderId: string | null;
 }
 
+const DRIVE_READONLY_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 const SEARCH_CONSOLE_READONLY_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
 
 export class GoogleDriveOAuthManager {
@@ -73,7 +74,7 @@ export class GoogleDriveOAuthManager {
     });
 
     const scopes = [...new Set(
-      `${env.GOOGLE_DRIVE_SCOPES} ${SEARCH_CONSOLE_READONLY_SCOPE}`
+      `${env.GOOGLE_DRIVE_SCOPES} ${DRIVE_READONLY_SCOPE} ${SEARCH_CONSOLE_READONLY_SCOPE}`
         .split(/\s+/)
         .map((scope) => scope.trim())
         .filter(Boolean),
