@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/darskit-ocr.ts": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
     {
       "source": "/darskit",
