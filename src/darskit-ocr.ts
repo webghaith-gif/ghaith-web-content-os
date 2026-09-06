@@ -20,8 +20,9 @@ function send(res: ServerResponse, status: number, body: unknown) {
 function cors(req: IncomingMessage, res: ServerResponse) {
   const origin = String(req.headers.origin || '');
   const allowed = !origin ||
-    /^https:\/\/([a-z0-9-]+\.)*canva\.com$/i.test(origin) ||
+    /^https:\/\/app-[a-z0-9-]+\.canva-apps\.com$/i.test(origin) ||
     /^https:\/\/([a-z0-9-]+\.)*canva-apps-dev\.com$/i.test(origin) ||
+    /^https:\/\/([a-z0-9-]+\.)*canva\.com$/i.test(origin) ||
     /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
   if (allowed && origin) res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Vary', 'Origin');
