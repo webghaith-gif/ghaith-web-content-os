@@ -1,4 +1,5 @@
 import { Alert, Button, FileInput, FormField, MultilineInput, Rows, Select, Text, TextInput, Title } from "@canva/app-ui-kit";
+import { auth } from "@canva/user";
 import { useMemo, useState } from "react";
 import { buildLearningDocument, DESIGN_STYLES, DOCUMENT_TYPES, SUBJECTS, validateDocument } from "./engine";
 import { readSourceFile } from "./file-reader";
@@ -13,6 +14,7 @@ export function App(){
   const [s,setS]=useState(initial); const [status,setStatus]=useState<{tone:"positive"|"critical"|"info";text:string}|null>(null); const [busy,setBusy]=useState(false); const [fileName,setFileName]=useState("");
   const doc=useMemo(()=>buildLearningDocument(s),[s]); const problems=useMemo(()=>validateDocument(doc),[doc]);
   const patch=<K extends keyof DarsKitFormState>(key:K,value:DarsKitFormState[K])=>setS(prev=>({...prev,[key]:value}));
+  if ((window as any).__DarsKitAuthProbe === true) { void auth.getCanvaUserToken(); }
   async function importFile(file:File){setStatus({tone:"info",text:`جارٍ قراءة الملف: ${file.name}`});try{patch("sourceText",await readSourceFile(file));setFileName(file.name);setStatus({tone:"positive",text:`تم استخراج نص السند من: ${file.name}`});}catch(e){setStatus({tone:"critical",text:e instanceof Error?e.message:"تعذرت قراءة الملف."});}}
   async function create(){if(problems.length){setStatus({tone:"critical",text:problems.join("، ")});return;}setBusy(true);setStatus({tone:"info",text:"جارٍ إنشاء الوثيقة في Canva…"});try{await renderLearningDocument(doc);setStatus({tone:"positive",text:"تمت إضافة الوثيقة التعليمية إلى التصميم."});}catch(e){console.error(e);setStatus({tone:"critical",text:"تعذرت إضافة الوثيقة. تأكدي من فتح تصميم يدعم إضافة الصفحات ثم حاولي مجددًا."});}finally{setBusy(false);}}
   return <div className={styles.scrollContainer} dir="rtl"><Rows spacing="2u">
