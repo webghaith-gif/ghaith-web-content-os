@@ -1,7 +1,5 @@
 import { AppError } from '../core/errors';
 import { Store } from '../repositories/store';
-import { AssetService } from './asset.service';
-import { ContentGenerationService } from './content-generation.service';
 import { IntelligenceService } from './intelligence.service';
 import { ProductGenerationService } from './product-generation.service';
 import { ReportArchiveService } from './report-archive.service';
@@ -14,16 +12,12 @@ const AUTO_PIPELINE_CUTOVER = Date.parse('2026-08-22T09:00:00Z');
 
 export class ReportPipelineService {
   private readonly intelligence: IntelligenceService;
-  private readonly generation: ContentGenerationService;
-  private readonly assets: AssetService;
   private readonly products: ProductGenerationService;
   private readonly archive: ReportArchiveService;
   private readonly automation: ReportAutomationService;
 
   constructor(private readonly store: Store) {
     this.intelligence = new IntelligenceService(store);
-    this.generation = new ContentGenerationService(store);
-    this.assets = new AssetService(store);
     this.products = new ProductGenerationService(store);
     this.archive = new ReportArchiveService(store);
     this.automation = new ReportAutomationService(store);
@@ -62,36 +56,43 @@ export class ReportPipelineService {
         return { ok: true, idle: false, reportId: report.id, stage: 'OPPORTUNITIES_READY', count: opportunities.length };
       }
 
+      // Content/product creation is now authored by Ghaith Web Content Pro in ChatGPT.
+      // The scheduled pipeline deliberately waits instead of asking Gemini or a fallback renderer
+      // to invent a second, lower-quality package. POST /api/automation/gpt-intake resumes the
+      // same durable pipeline without changing the approval/publishing architecture.
       if (!status.contentReady) {
         const opportunityId = status.opportunityId;
         if (!opportunityId) throw new AppError('No selected opportunity is available.', 409, 'PIPELINE_INCOMPLETE');
-        const content = await this.generation.createFromOpportunity(
-          opportunityId,
-          ['facebook', 'instagram', 'tiktok', 'pinterest', 'youtube'],
-          oidcToken,
-        );
-        await this.automation.markContentReady(report.id, content);
         return {
           ok: true,
-          idle: false,
+          idle: true,
           reportId: report.id,
-          stage: hasGeneratedMedia(content) ? 'CONTENT_AND_ASSETS_READY' : 'CONTENT_READY',
-          contentId: content.id,
+          opportunityId,
+          stage: 'WAITING_FOR_GPT_PACKAGE',
+          message: 'Waiting for the final GPT-authored package. Gemini content generation is intentionally skipped.',
         };
       }
 
       if (!status.assetsReady) {
-        if (!status.contentId) throw new AppError('Content is missing from the pipeline.', 409, 'PIPELINE_INCOMPLETE');
-        const content = await this.assets.requestAssets(status.contentId);
-        await this.automation.markContentReady(report.id, content);
-        return { ok: true, idle: false, reportId: report.id, stage: 'ASSETS_READY', contentId: content.id, assets: content.assets.length };
+        return {
+          ok: true,
+          idle: true,
+          reportId: report.id,
+          contentId: status.contentId,
+          stage: 'WAITING_FOR_GPT_ASSETS',
+          message: 'Waiting for the Canva/final media attached by GPT intake. Automatic fallback media generation is intentionally skipped.',
+        };
       }
 
       if (!status.productReadyForReview) {
-        const opportunityId = status.opportunityId;
-        if (!opportunityId) throw new AppError('No selected opportunity is available for product generation.', 409, 'PIPELINE_INCOMPLETE');
-        const product = await this.products.createFromOpportunity(opportunityId, oidcToken);
-        return { ok: true, idle: false, reportId: report.id, stage: 'PRODUCT_READY_FOR_REVIEW', productId: product.id };
+        return {
+          ok: true,
+          idle: true,
+          reportId: report.id,
+          opportunityId: status.opportunityId,
+          stage: 'WAITING_FOR_GPT_PRODUCT',
+          message: 'Waiting for the GPT-authored product draft. Automatic Gemini product generation is intentionally skipped.',
+        };
       }
 
       status = await this.automation.status(report.id);
@@ -105,6 +106,7 @@ export class ReportPipelineService {
     }
   }
 
+  /** Manual fallback only. Scheduled automation no longer calls this automatically. */
   async createProduct(opportunityId: string, oidcToken?: string) {
     return this.products.createFromOpportunity(opportunityId, oidcToken);
   }
@@ -116,8 +118,4 @@ export class ReportPipelineService {
   async archiveProduct(productId: string) {
     return this.products.archiveProduct(productId);
   }
-}
-
-function hasGeneratedMedia(content: { assets: Array<{ kind: string }> }): boolean {
-  return content.assets.some((asset) => ['image', 'carousel', 'video'].includes(asset.kind));
 }

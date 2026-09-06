@@ -1,9 +1,11 @@
 import { GoogleDriveAdapter } from '../integrations/google-drive.adapter';
 import { GoogleDriveOAuthManager } from '../integrations/google-drive-oauth';
 import { Store } from '../repositories/store';
+import { GptDriveIntakeService } from './gpt-drive-intake.service';
 import { NotificationService } from './notification.service';
 
 const INTAKE_NAME = 'Ghaith Web — Incoming Report';
+const GPT_PACKAGE_PREFIX = 'Ghaith Web GPT Package —';
 
 interface DriveFileMetadata {
   id: string;
@@ -17,11 +19,13 @@ interface DriveFileMetadata {
 export class DriveReportIngestionService {
   private readonly drive: GoogleDriveAdapter;
   private readonly oauth: GoogleDriveOAuthManager;
+  private readonly gptPackages: GptDriveIntakeService;
   private readonly notifications: NotificationService;
 
   constructor(private readonly store: Store) {
     this.drive = new GoogleDriveAdapter(store);
     this.oauth = new GoogleDriveOAuthManager(store);
+    this.gptPackages = new GptDriveIntakeService(store);
     this.notifications = new NotificationService(store);
   }
 
@@ -84,6 +88,13 @@ export class DriveReportIngestionService {
         continue;
       }
 
+      // GPT package manifests are a handoff envelope for an existing report, never a new report.
+      // Excluding them here prevents the package document from recursively re-entering the report pipeline.
+      if (String(metadata.name ?? '').startsWith(GPT_PACKAGE_PREFIX)) {
+        ignored.push({ fileId: metadata.id, reason: 'gpt_package_manifest' });
+        continue;
+      }
+
       if (existingReports.some((report) => report.googleDriveUrl?.includes(metadata.id))) {
         ignored.push({ fileId: metadata.id, reason: 'already_imported' });
         continue;
@@ -116,7 +127,15 @@ export class DriveReportIngestionService {
       });
     }
 
-    return { ok: true, scanned: candidates.length, imported, ignored };
+    let gptPackages: unknown;
+    try {
+      gptPackages = await this.gptPackages.importPendingPackages();
+    } catch (error) {
+      gptPackages = { ok: false, message: error instanceof Error ? error.message : String(error) };
+      console.warn('GPT package Drive intake deferred', error);
+    }
+
+    return { ok: true, scanned: candidates.length, imported, ignored, gptPackages };
   }
 
   private async listRootReportFiles(rootFolderId: string, accessToken: string): Promise<DriveFileMetadata[]> {

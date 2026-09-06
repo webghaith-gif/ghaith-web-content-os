@@ -17,6 +17,7 @@ export const PRODUCT_STATUSES = [
 export type ContentStatus = (typeof CONTENT_STATUSES)[number];
 export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
 export type PublishResult = 'SUCCESS' | 'WARNING' | 'ERROR';
+export type PublishMediaMode = 'single_image' | 'carousel' | 'reel';
 
 export interface ReportAutomationState {
   version: number;
@@ -27,6 +28,8 @@ export interface ReportAutomationState {
   assetsReadyAt?: string;
   productId?: string;
   productReadyForReviewAt?: string;
+  /** GPT explicitly decided this opportunity does not justify a product draft. */
+  productSkippedAt?: string;
   completedAt?: string;
   lastError?: string;
   lastErrorAt?: string;
@@ -126,6 +129,8 @@ export interface PlatformContentVariant {
   cta?: string;
   title?: string;
   hashtags?: string[];
+  /** Optional explicit publishing form. When omitted the app infers it from platform-targeted assets. */
+  mediaMode?: PublishMediaMode;
 }
 
 export interface ContentQualityReview {
@@ -209,6 +214,11 @@ export interface PublicationLog {
   idempotencyKey: string;
 }
 
+export interface PublishMediaItem {
+  url: string;
+  kind: 'image' | 'video';
+}
+
 export interface PublishRequest {
   contentId: string;
   clickupTaskId?: string;
@@ -217,6 +227,8 @@ export interface PublishRequest {
   caption?: string;
   description?: string;
   mediaUrls: string[];
+  mediaItems: PublishMediaItem[];
+  mediaMode: PublishMediaMode;
   mediaType?: string;
   status: ContentStatus;
   idempotencyKey: string;

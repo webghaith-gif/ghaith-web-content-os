@@ -48,6 +48,13 @@ export interface ClickUpWebhookState {
   processedLogTaskIds?: string[];
 }
 
+export interface PublishingRuntimeState {
+  mode?: 'webhook' | 'clickup_watch';
+  webhookUrl?: string;
+  webhookSecret?: string;
+  updatedAt?: string;
+}
+
 export interface PushSubscriptionState {
   endpoint: string;
   expirationTime?: number | null;
@@ -76,6 +83,7 @@ export interface IntegrationState {
   clickup?: {
     webhook?: ClickUpWebhookState;
   };
+  publishing?: PublishingRuntimeState;
   notifications?: PushNotificationState;
 }
 

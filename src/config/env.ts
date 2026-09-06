@@ -65,9 +65,11 @@ export const env = {
   CLICKUP_STATUS_READY: process.env.CLICKUP_STATUS_READY?.trim() || 'ready',
   CLICKUP_STATUS_PUBLISHED: process.env.CLICKUP_STATUS_PUBLISHED?.trim() || 'published',
 
-  PUBLISH_MODE: (process.env.PUBLISH_MODE ?? 'clickup_watch').trim().toLowerCase(),
+  // Canonical publishing path is direct app → automation webhook. The old PUBLISH_MODE variable is intentionally ignored.
+  // ClickUp remains available as an explicit persisted fallback mode, but it is no longer the production default.
+  PUBLISH_MODE: (process.env.PUBLISH_MODE_RUNTIME ?? 'webhook').trim().toLowerCase(),
   // Vendor-neutral automation bridge. It can point to Make, n8n, or any compatible webhook.
-  // Legacy MAKE_* variables remain supported so the current scenario needs no migration.
+  // Legacy MAKE_* variables remain supported so existing environments need no migration.
   PUBLISH_WEBHOOK_URL: optionalUrl('PUBLISH_WEBHOOK_URL') ?? optionalUrl('AUTOMATION_WEBHOOK_URL') ?? optionalUrl('MAKE_WEBHOOK_URL'),
   PUBLISH_WEBHOOK_SECRET:
     process.env.PUBLISH_WEBHOOK_SECRET?.trim()
@@ -83,8 +85,10 @@ export const env = {
   GOOGLE_DRIVE_REFRESH_TOKEN: process.env.GOOGLE_DRIVE_REFRESH_TOKEN?.trim() || undefined,
   // Optional dedicated state database. When set, Drive OAuth/folder/watch state survives DATABASE_URL rotations.
   GOOGLE_DRIVE_STATE_DATABASE_URL: process.env.GOOGLE_DRIVE_STATE_DATABASE_URL?.trim() || undefined,
-  // Least-privilege default: the app may manage only files it creates or that the user explicitly grants to it.
-  GOOGLE_DRIVE_SCOPES: process.env.GOOGLE_DRIVE_SCOPES?.trim() || 'https://www.googleapis.com/auth/drive.file',
+  // Read-only visibility is required so notification links can preview files created by other tools/users.
+  // drive.file remains the write scope, so the app can only edit files it created or the user explicitly granted to it.
+  GOOGLE_DRIVE_SCOPES: process.env.GOOGLE_DRIVE_SCOPES?.trim()
+    || 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly',
   // Optional explicit folder override. When omitted, OAuth mode creates and remembers an app-owned export folder.
   GOOGLE_DRIVE_FOLDER_ID: process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() || undefined,
   GOOGLE_DRIVE_FOLDER_NAME: process.env.GOOGLE_DRIVE_FOLDER_NAME?.trim() || 'Ghaith Web Content OS — Runtime Exports',

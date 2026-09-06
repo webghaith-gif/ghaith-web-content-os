@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1739" />
+  <title>Ghaith Creative Studio</title>
+  <style>
+    :root{--navy:#0b1739;--navy2:#142759;--gold:#c6a35a;--beige:#f5efe3;--paper:#fffdf8;--ink:#10172b;--muted:#6f7892;--line:#e7e2d8;--good:#137a62;--danger:#b84242;--shadow:0 16px 50px rgba(8,18,47,.12);--r:18px}
+    *{box-sizing:border-box} html,body{margin:0;min-height:100%;font-family:Inter,"Segoe UI",Tahoma,Arial,sans-serif;background:#f3f5f9;color:var(--ink)} button,input,textarea,select{font:inherit} button{cursor:pointer}
+    .app{min-height:100vh;display:grid;grid-template-columns:260px minmax(0,1fr)}
+    .side{background:linear-gradient(180deg,var(--navy),#09112a);color:white;padding:22px 16px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh;overflow:auto}
+    .brand{display:flex;align-items:center;gap:12px;padding:4px 4px 14px}.logo{width:42px;height:42px;border-radius:13px;background:linear-gradient(135deg,#49a8ff,#7dd9ff);display:grid;place-items:center;color:var(--navy);font-weight:900;box-shadow:inset 0 0 0 1px rgba(255,255,255,.55)}
+    .brand h1{font-size:16px;margin:0}.brand small{display:block;color:#aebfe6;margin-top:4px;font-size:11px}
+    .sideTitle{font-size:11px;color:#8fa4d7;text-transform:uppercase;letter-spacing:.12em;padding:0 8px}.studios{display:grid;gap:7px}.studioBtn{border:0;background:transparent;color:#d9e4ff;border-radius:12px;padding:11px 12px;text-align:start;display:flex;align-items:center;gap:10px}.studioBtn:hover,.studioBtn.active{background:rgba(255,255,255,.1);color:#fff}.ico{width:28px;height:28px;border-radius:9px;background:rgba(255,255,255,.1);display:grid;place-items:center}
+    .sideFoot{margin-top:auto;border-top:1px solid rgba(255,255,255,.1);padding-top:14px;color:#9fb0d5;font-size:11px;line-height:1.7}
+    .main{min-width:0}.topbar{height:70px;background:rgba(255,255,255,.92);backdrop-filter:blur(16px);border-bottom:1px solid #e8ebf1;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:20}.topbar .title{display:flex;align-items:center;gap:10px}.pill{font-size:11px;padding:5px 9px;border-radius:999px;background:#eef4ff;color:#315999;font-weight:700}.actions{display:flex;align-items:center;gap:8px}.btn{border:1px solid #d9deea;background:#fff;color:var(--ink);padding:9px 12px;border-radius:11px;font-weight:700;font-size:12px}.btn:hover{background:#f8f9fc}.btn.primary{background:var(--navy);color:#fff;border-color:var(--navy)}.btn.gold{background:var(--gold);border-color:var(--gold);color:#1e1a12}.btn.danger{color:var(--danger)}
+    .workspace{display:grid;grid-template-columns:360px minmax(0,1fr);gap:18px;padding:18px;align-items:start}.panel{background:#fff;border:1px solid #e6e9f0;border-radius:var(--r);box-shadow:0 8px 26px rgba(19,32,66,.05)}.controls{padding:18px;position:sticky;top:88px;max-height:calc(100vh - 106px);overflow:auto}.section{padding:0 0 16px;margin-bottom:16px;border-bottom:1px solid #edf0f5}.section:last-child{border-bottom:0;margin-bottom:0}.section h3{font-size:13px;margin:0 0 10px}.label{display:block;font-size:11px;font-weight:800;color:#46516d;margin:10px 0 6px}.field,textarea,select{width:100%;border:1px solid #dfe4ee;border-radius:11px;background:#fbfcfe;padding:10px 11px;outline:none;color:var(--ink)}textarea{min-height:95px;resize:vertical}.field:focus,textarea:focus,select:focus{border-color:#8ea6db;box-shadow:0 0 0 3px rgba(75,112,192,.10)}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.colorBox{display:flex;align-items:center;gap:6px}.colorBox input{width:100%;height:38px;border:1px solid #e1e5ed;border-radius:9px;background:#fff;padding:3px}.muted{font-size:11px;color:var(--muted);line-height:1.6}.status{font-size:11px;color:var(--good);font-weight:800;margin-top:7px;min-height:18px}
+    .stage{padding:18px;min-height:calc(100vh - 106px);display:flex;flex-direction:column}.stageTop{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap}.pageTabs{display:flex;gap:6px;flex-wrap:wrap}.pageTab{border:1px solid #dde2ed;background:#fff;padding:7px 10px;border-radius:9px;font-size:11px}.pageTab.active{background:#eaf0ff;border-color:#9fb4e7;color:#24478d}.canvasShell{flex:1;display:grid;place-items:center;background:linear-gradient(135deg,#eef1f7,#f9fafc);border-radius:15px;border:1px dashed #d9deea;overflow:auto;padding:28px;min-height:600px}
+    .canvas{--c1:#0b1739;--c2:#c6a35a;--c3:#f5efe3;--c4:#ffffff;width:min(100%,720px);aspect-ratio:1/1;background:var(--c4);box-shadow:var(--shadow);position:relative;overflow:hidden;transition:.2s;border-radius:4px}.canvas.story{aspect-ratio:9/16;max-width:390px}.canvas.a4{aspect-ratio:210/297;max-width:560px}.canvas.presentation{aspect-ratio:16/9;max-width:820px}.canvas.portrait{aspect-ratio:4/5;max-width:610px}
+    .design{position:absolute;inset:0;display:flex;flex-direction:column;padding:8.2%;background:radial-gradient(circle at 12% 12%,color-mix(in srgb,var(--c2) 22%,transparent),transparent 28%),linear-gradient(150deg,var(--c3),var(--c4) 54%)}.design:before{content:"";position:absolute;width:44%;height:44%;border-radius:50%;background:var(--c1);left:-18%;bottom:-22%;opacity:.94}.design:after{content:"";position:absolute;width:22%;height:22%;border:1px solid color-mix(in srgb,var(--c2) 65%,transparent);border-radius:50%;right:-8%;top:12%}.eyebrow{position:relative;z-index:2;display:inline-flex;align-self:flex-start;border:1px solid color-mix(in srgb,var(--c1) 18%,transparent);border-radius:999px;padding:5px 10px;font-size:clamp(9px,1.2vw,13px);font-weight:800;color:var(--c1);background:rgba(255,255,255,.72)}.headline{position:relative;z-index:2;margin:12% 0 3%;font-size:clamp(28px,5vw,58px);line-height:1.05;color:var(--c1);max-width:88%;font-weight:900;letter-spacing:-.035em}.subtitle{position:relative;z-index:2;color:#49536b;line-height:1.65;font-size:clamp(12px,1.65vw,18px);max-width:82%;margin:0}.cards{position:relative;z-index:2;margin-top:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:2.2%}.mini{background:rgba(255,255,255,.82);border:1px solid color-mix(in srgb,var(--c1) 10%,transparent);padding:11%;border-radius:14px;min-height:76px}.mini b{display:block;color:var(--c1);font-size:clamp(10px,1.3vw,14px);margin-bottom:4px}.mini span{font-size:clamp(8px,1vw,11px);color:#6a7285;line-height:1.4}.footerMark{position:absolute;z-index:2;left:8%;bottom:5%;font-size:10px;color:white;font-weight:800;letter-spacing:.04em}.num{position:absolute;z-index:2;right:8%;bottom:5%;font-size:10px;color:#57637d}
+    [contenteditable="true"]{outline:0;border-radius:5px}.canvas.editing [contenteditable="true"]:hover{box-shadow:0 0 0 1px rgba(67,96,162,.28);background:rgba(255,255,255,.2)}
+    .toast{position:fixed;left:22px;bottom:22px;background:#10172b;color:#fff;padding:11px 14px;border-radius:11px;box-shadow:var(--shadow);font-size:12px;opacity:0;transform:translateY(8px);pointer-events:none;transition:.2s;z-index:60}.toast.show{opacity:1;transform:none}
+    .mobileMenu{display:none}.tip{background:#f6f8fd;border:1px solid #e0e6f5;border-radius:12px;padding:11px;font-size:11px;color:#58637c;line-height:1.55}
+    @media(max-width:980px){.app{grid-template-columns:1fr}.side{display:none}.workspace{grid-template-columns:1fr}.controls{position:static;max-height:none}.topbar{padding:0 12px}.mobileMenu{display:inline-flex}.stage{min-height:auto}.canvasShell{min-height:520px;padding:15px}.actions .hideSm{display:none}}
+    @media(max-width:560px){.workspace{padding:10px}.panel{border-radius:14px}.controls,.stage{padding:12px}.topbar{height:62px}.headline{margin-top:18%}.cards{grid-template-columns:1fr;gap:6px}.mini{padding:8px;min-height:48px}.mini:nth-child(3){display:none}.canvasShell{min-height:480px}.btn{padding:8px 9px}}
+    @media print{.side,.topbar,.controls,.stageTop{display:none!important}.app,.main,.workspace,.stage,.canvasShell{display:block!important;padding:0!important;margin:0!important;background:#fff!important;border:0!important;box-shadow:none!important}.canvas{width:100%!important;max-width:none!important;box-shadow:none!important}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><div class="logo">GW</div><div><h1>Ghaith Creative Studio</h1><small>Smart Visual Builder · MVP</small></div></div>
+    <div class="sideTitle">Studios</div>
+    <div class="studios" id="studios"></div>
+    <div class="sideFoot">نسخة سريعة مستقلة داخل Ghaith Web Content OS.<br>الحفظ يتم محليًا على جهازك تلقائيًا.</div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="title"><button class="btn mobileMenu" onclick="toggleStudioMenu()">☰</button><strong id="projectTitle">مشروع جديد</strong><span class="pill" id="modePill">Social Studio</span></div>
+      <div class="actions">
+        <button class="btn hideSm" onclick="newProject()">جديد</button>
+        <button class="btn" onclick="saveProject()">حفظ</button>
+        <button class="btn gold" onclick="exportPNG()">PNG</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <section class="panel controls">
+        <div class="section">
+          <h3>1. الفكرة</h3>
+          <label class="label">صف ما تريد إنشاءه</label>
+          <textarea id="prompt" placeholder="مثال: أنشئ كاروسيل تعليميًا للمعلمين عن 5 طرق لتوفير الوقت باستعمال الذكاء الاصطناعي"></textarea>
+          <div class="grid2">
+            <div><label class="label">اللغة</label><select id="language"><option value="ar">العربية RTL</option><option value="en">English</option><option value="fr">Français</option></select></div>
+            <div><label class="label">الأسلوب</label><select id="tone"><option value="premium">فاخر وهادئ</option><option value="educational">تعليمي واضح</option><option value="bold">جريء وحديث</option><option value="minimal">Minimal</option></select></div>
+          </div>
+          <label class="label">المقاس</label>
+          <select id="size"><option value="square">1080 × 1080</option><option value="portrait">1080 × 1350</option><option value="story">1080 × 1920</option><option value="presentation">16:9 Presentation</option><option value="a4">A4</option></select>
+          <button class="btn primary" style="width:100%;margin-top:12px" onclick="generateProject()">✦ أنشئ التصميم</button>
+          <div class="status" id="status"></div>
+        </div>
+
+        <div class="section">
+          <h3>2. Brand Kit</h3>
+          <div class="swatches">
+            <div class="colorBox"><input id="c1" type="color" value="#0b1739" title="Primary"></div>
+            <div class="colorBox"><input id="c2" type="color" value="#c6a35a" title="Accent"></div>
+            <div class="colorBox"><input id="c3" type="color" value="#f5efe3" title="Background"></div>
+            <div class="colorBox"><input id="c4" type="color" value="#ffffff" title="Paper"></div>
+          </div>
+          <label class="label">اسم العلامة</label><input class="field" id="brandName" value="غيث ويب" />
+          <button class="btn" style="width:100%;margin-top:8px" onclick="applyBrand()">تطبيق الهوية على كل الصفحات</button>
+        </div>
+
+        <div class="section">
+          <h3>3. أدوات سريعة</h3>
+          <div class="grid2">
+            <button class="btn" onclick="duplicatePage()">نسخ الصفحة</button>
+            <button class="btn" onclick="addPage()">صفحة جديدة</button>
+            <button class="btn" onclick="regeneratePage()">إعادة توليد</button>
+            <button class="btn" onclick="toggleEdit()">تحرير النص</button>
+          </div>
+          <button class="btn danger" style="width:100%;margin-top:8px" onclick="deletePage()">حذف الصفحة الحالية</button>
+        </div>
+
+        <div class="section">
+          <h3>4. المشروع</h3>
+          <label class="label">اسم المشروع</label><input class="field" id="name" value="مشروع جديد" />
+          <div class="grid2" style="margin-top:8px"><button class="btn" onclick="exportJSON()">Export JSON</button><label class="btn" style="text-align:center">Import JSON<input id="importFile" type="file" accept="application/json" hidden></label></div>
+        </div>
+        <div class="tip">هذه النسخة لا تحتاج API مدفوعًا. محركها الحالي يبني المحتوى والهيكلة محليًا بسرعة. تم تصميمها بحيث يمكن لاحقًا استبدال مولّد النص بمحرك AI حقيقي دون تغيير الواجهة.</div>
+      </section>
+
+      <section class="panel stage">
+        <div class="stageTop"><div class="pageTabs" id="pageTabs"></div><div class="row"><button class="btn" onclick="prevPage()">←</button><span class="muted" id="pageCounter">1 / 1</span><button class="btn" onclick="nextPage()">→</button></div></div>
+        <div class="canvasShell"><div class="canvas square" id="canvas"></div></div>
+      </section>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const STUDIOS=[
+  {id:'social',icon:'◉',name:'Social Studio',pages:1,size:'square'},
+  {id:'carousel',icon:'▦',name:'Carousel Studio',pages:5,size:'square'},
+  {id:'presentation',icon:'▰',name:'Presentation Studio',pages:6,size:'presentation'},
+  {id:'ebook',icon:'▤',name:'Ebook / Author Studio',pages:5,size:'a4'},
+  {id:'planner',icon:'⌑',name:'Planner Studio',pages:4,size:'a4'},
+  {id:'education',icon:'✎',name:'Education Studio',pages:4,size:'a4'},
+  {id:'brand',icon:'✦',name:'Brand Studio',pages:3,size:'square'}
+];
+let state={studio:'social',pages:[],current:0,editing:false,brand:{c1:'#0b1739',c2:'#c6a35a',c3:'#f5efe3',c4:'#ffffff',name:'غيث ويب'},name:'مشروع جديد',language:'ar',tone:'premium',size:'square'};
+
+function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),1800)}
+function setStatus(msg){document.getElementById('status').textContent=msg||''}
+function debounce(fn,ms=350){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
+const autosave=debounce(()=>{persist();setStatus('تم الحفظ تلقائيًا ✓');setTimeout(()=>setStatus(''),1200)},500);
+
+function studioById(id){return STUDIOS.find(s=>s.id===id)||STUDIOS[0]}
+function mountStudios(){const box=document.getElementById('studios');box.innerHTML=STUDIOS.map(s=>`<button class="studioBtn ${state.studio===s.id?'active':''}" onclick="selectStudio('${s.id}')"><span class="ico">${s.icon}</span><span>${s.name}</span></button>`).join('')}
+function selectStudio(id){state.studio=id;const s=studioById(id);state.size=s.size;document.getElementById('size').value=s.size;document.getElementById('modePill').textContent=s.name;mountStudios();if(!state.pages.length) generateProject();autosave()}
+
+function keywordTitle(prompt,studio){
+  const clean=(prompt||'').trim().replace(/^أنشئ\s*/,'').replace(/^اصنع\s*/,'');
+  if(clean) return clean.length>74?clean.slice(0,71)+'…':clean;
+  const fallback={social:'فكرة تستحق أن تُرى',carousel:'دليل عملي خطوة بخطوة',presentation:'عرض واضح يقود إلى القرار',ebook:'دليل عملي متكامل',planner:'خطتك المنظمة تبدأ هنا',education:'تعلم أفضل، بخطوات أوضح',brand:'هوية تُعرف من أول نظرة'};
+  return fallback[studio]||fallback.social;
+}
+function copyByLang(lang){
+  if(lang==='en') return {eyebrow:'SMART CREATIVE SYSTEM',sub:'A structured visual draft designed to be clear, editable and reusable.',cards:[['Structure','Clear hierarchy'],['Design','Consistent system'],['Ready','Edit & export']]};
+  if(lang==='fr') return {eyebrow:'SYSTÈME CRÉATIF',sub:'Une première version visuelle structurée, cohérente, modifiable et réutilisable.',cards:[['Structure','Hiérarchie claire'],['Design','Système cohérent'],['Prêt','Modifier & exporter']]};
+  return {eyebrow:'نظام إبداعي ذكي',sub:'مسودة بصرية منظّمة وقابلة للتعديل وإعادة الاستخدام، مبنية لتصل إلى نتيجة واضحة بسرعة.',cards:[['الهيكلة','تسلسل واضح'],['التصميم','هوية متناسقة'],['جاهز','عدّل وصدّر']]};
+}
+function pageTitle(i,total,base,studio,lang){
+  if(i===0)return base;
+  if(lang==='en') return ['The core idea','Why it matters','The practical steps','Example & application','Key takeaway','Next action'][Math.min(i,5)]||`Page ${i+1}`;
+  if(lang==='fr') return ['Idée essentielle','Pourquoi c’est important','Étapes pratiques','Exemple concret','À retenir','Prochaine action'][Math.min(i,5)]||`Page ${i+1}`;
+  const maps={carousel:['الفكرة الأساسية','لماذا يهمك ذلك؟','الخطوات العملية','مثال تطبيقي','الخلاصة'],presentation:['المشهد الحالي','الفرصة','الحل المقترح','كيف يعمل؟','القيمة','الخطوة التالية'],ebook:['مقدمة الدليل','الفصل الأول','الفصل الثاني','التطبيق العملي','الخلاصة'],planner:['صفحة البداية','الأهداف','خطة التنفيذ','المراجعة'],education:['هدف التعلّم','المفاهيم الأساسية','نشاط تطبيقي','تقويم سريع'],brand:['جوهر العلامة','النبرة البصرية','نظام الهوية']};
+  return (maps[studio]||maps.carousel)[Math.min(i,(maps[studio]||maps.carousel).length-1)]||`الصفحة ${i+1}`;
+}
+function buildPage(i,total,base){const cp=copyByLang(state.language);return {eyebrow:i===0?cp.eyebrow:`${i+1} / ${total}`,title:pageTitle(i,total,base,state.studio,state.language),subtitle:i===0?cp.sub:(state.language==='ar'?'حوّل الفكرة إلى خطوة مفهومة وقابلة للتطبيق، مع الحفاظ على البساطة والوضوح.':state.language==='fr'?'Transformez l’idée en une étape claire et directement exploitable.':'Turn the idea into a clear, practical next step.'),cards:cp.cards.map((x,k)=>[x[0],i?((state.language==='ar'?['مختصر ومفيد','منظم بصريًا','قابل للتطبيق'][k]:state.language==='fr'?['Clair et utile','Structuré','Actionnable'][k]:['Clear & useful','Well structured','Actionable'][k])):x[1]])}}
+function generateProject(){
+  state.language=document.getElementById('language').value;state.tone=document.getElementById('tone').value;state.size=document.getElementById('size').value;state.name=document.getElementById('name').value.trim()||'مشروع جديد';
+  const st=studioById(state.studio), count=st.pages, base=keywordTitle(document.getElementById('prompt').value,state.studio);
+  state.pages=Array.from({length:count},(_,i)=>buildPage(i,count,base));state.current=0;applyBrand(false);render();autosave();toast(`تم إنشاء ${count} صفحة`)
+}
+function render(){
+  const canvas=document.getElementById('canvas');canvas.className=`canvas ${state.size} ${state.editing?'editing':''}`;
+  canvas.style.setProperty('--c1',state.brand.c1);canvas.style.setProperty('--c2',state.brand.c2);canvas.style.setProperty('--c3',state.brand.c3);canvas.style.setProperty('--c4',state.brand.c4);
+  const p=state.pages[state.current]||buildPage(0,1,'مشروع جديد');
+  const dir=state.language==='ar'?'rtl':'ltr';document.documentElement.dir=dir;document.documentElement.lang=state.language;
+  canvas.innerHTML=`<div class="design" dir="${dir}"><div class="eyebrow" contenteditable="${state.editing}" data-k="eyebrow">${esc(p.eyebrow)}</div><h2 class="headline" contenteditable="${state.editing}" data-k="title">${esc(p.title)}</h2><p class="subtitle" contenteditable="${state.editing}" data-k="subtitle">${esc(p.subtitle)}</p><div class="cards">${p.cards.map((c,i)=>`<div class="mini"><b contenteditable="${state.editing}" data-card="${i}" data-part="0">${esc(c[0])}</b><span contenteditable="${state.editing}" data-card="${i}" data-part="1">${esc(c[1])}</span></div>`).join('')}</div><div class="footerMark">${esc(state.brand.name)}</div><div class="num">${state.current+1} / ${state.pages.length}</div></div>`;
+  if(state.editing){canvas.querySelectorAll('[contenteditable="true"]').forEach(el=>el.addEventListener('input',()=>{const p=state.pages[state.current];if(el.dataset.k)p[el.dataset.k]=el.textContent;else if(el.dataset.card)p.cards[+el.dataset.card][+el.dataset.part]=el.textContent;autosave()}))}
+  document.getElementById('projectTitle').textContent=state.name;document.getElementById('name').value=state.name;document.getElementById('modePill').textContent=studioById(state.studio).name;document.getElementById('pageCounter').textContent=`${state.current+1} / ${state.pages.length}`;
+  document.getElementById('pageTabs').innerHTML=state.pages.map((_,i)=>`<button class="pageTab ${i===state.current?'active':''}" onclick="goPage(${i})">${i+1}</button>`).join('');
+  mountStudios();
+}
+function applyBrand(doSave=true){state.brand={c1:document.getElementById('c1').value,c2:document.getElementById('c2').value,c3:document.getElementById('c3').value,c4:document.getElementById('c4').value,name:document.getElementById('brandName').value.trim()||'Brand'};render();if(doSave){autosave();toast('تم تطبيق الهوية')}}
+function syncBrandInputs(){for(const k of ['c1','c2','c3','c4'])document.getElementById(k).value=state.brand[k];document.getElementById('brandName').value=state.brand.name}
+function addPage(){const base=keywordTitle(document.getElementById('prompt').value,state.studio);state.pages.push(buildPage(state.pages.length,state.pages.length+1,base));state.current=state.pages.length-1;render();autosave()}
+function duplicatePage(){if(!state.pages.length)return;state.pages.splice(state.current+1,0,JSON.parse(JSON.stringify(state.pages[state.current])));state.current++;render();autosave();toast('تم نسخ الصفحة')}
+function deletePage(){if(state.pages.length<=1){toast('يجب أن يبقى مشروعك بصفحة واحدة على الأقل');return}state.pages.splice(state.current,1);state.current=Math.max(0,Math.min(state.current,state.pages.length-1));render();autosave()}
+function regeneratePage(){const base=keywordTitle(document.getElementById('prompt').value,state.studio);state.pages[state.current]=buildPage(state.current,state.pages.length,base);render();autosave();toast('تم تحديث الصفحة')}
+function toggleEdit(){state.editing=!state.editing;render();toast(state.editing?'وضع تحرير النص مفعل':'تم إنهاء التحرير')}
+function goPage(i){state.current=Math.max(0,Math.min(i,state.pages.length-1));render()} function prevPage(){goPage(state.current-1)} function nextPage(){goPage(state.current+1)}
+function newProject(){state.pages=[];state.current=0;document.getElementById('prompt').value='';document.getElementById('name').value='مشروع جديد';state.name='مشروع جديد';generateProject()}
+function persist(){state.name=document.getElementById('name').value.trim()||state.name;localStorage.setItem('ghaith-creative-studio-v1',JSON.stringify(state));document.getElementById('projectTitle').textContent=state.name}
+function saveProject(){persist();toast('تم حفظ المشروع على هذا الجهاز')}
+function restore(){try{const raw=localStorage.getItem('ghaith-creative-studio-v1');if(raw){state={...state,...JSON.parse(raw)};syncBrandInputs();document.getElementById('language').value=state.language;document.getElementById('tone').value=state.tone;document.getElementById('size').value=state.size;document.getElementById('name').value=state.name;render();return}}catch{} generateProject()}
+function exportJSON(){persist();const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});downloadBlob(blob,(state.name||'creative-project').replace(/\s+/g,'-')+'.json')}
+function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},300)}
+async function exportPNG(){
+  const canvas=document.getElementById('canvas');const w=canvas.offsetWidth,h=canvas.offsetHeight;const clone=canvas.cloneNode(true);clone.style.width=w+'px';clone.style.height=h+'px';clone.querySelectorAll('[contenteditable]').forEach(x=>x.removeAttribute('contenteditable'));
+  const style=[...document.querySelectorAll('style')].map(s=>s.textContent).join('\n');
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml"><style>${style.replace(/<\/style>/g,'')}</style>${clone.outerHTML}</div></foreignObject></svg>`;
+  try{const img=new Image();const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=url});const out=document.createElement('canvas');const scale=2;out.width=w*scale;out.height=h*scale;out.getContext('2d').drawImage(img,0,0,out.width,out.height);URL.revokeObjectURL(url);out.toBlob(b=>b&&downloadBlob(b,`${(state.name||'design').replace(/\s+/g,'-')}-${state.current+1}.png`),'image/png');toast('تم تجهيز PNG')}catch(e){window.print();toast('المتصفح منع PNG؛ تم فتح وضع الطباعة بدلًا منه')}
+}
+function toggleStudioMenu(){const current=studioById(state.studio),next=STUDIOS[(STUDIOS.indexOf(current)+1)%STUDIOS.length];selectStudio(next.id);toast(`Studio: ${next.name}`)}
+document.getElementById('importFile').addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;try{const obj=JSON.parse(await f.text());state={...state,...obj};syncBrandInputs();render();persist();toast('تم استيراد المشروع')}catch{toast('ملف المشروع غير صالح')}});
+['c1','c2','c3','c4','brandName'].forEach(id=>document.getElementById(id).addEventListener('input',()=>applyBrand()));
+document.getElementById('name').addEventListener('input',autosave);document.getElementById('size').addEventListener('change',e=>{state.size=e.target.value;render();autosave()});
+restore();
+</script>
+</body>
+</html>
