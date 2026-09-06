@@ -19,6 +19,7 @@ function allowCors(req: any, res: any) {
   const origin = String(req.headers?.origin || '');
   const allowed =
     !origin ||
+    /^https:\/\/app-[a-z0-9-]+\.canva-apps\.com$/i.test(origin) ||
     /^https:\/\/([a-z0-9-]+\.)*canva\.com$/i.test(origin) ||
     /^https:\/\/([a-z0-9-]+\.)*canva-apps-dev\.com$/i.test(origin) ||
     /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
