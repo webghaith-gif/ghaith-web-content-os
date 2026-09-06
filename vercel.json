@@ -2,6 +2,9 @@
   "functions": {
     "api/darskit-ocr.ts": {
       "maxDuration": 60
+    },
+    "api/darskit-generate.ts": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
